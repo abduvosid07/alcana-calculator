@@ -116,10 +116,16 @@ line total:
 
 ## Language
 
-One-time `/til` (Uzbek) / `/язык` (Russian) command sets the staff member's
+One-time `/til` (Uzbek) / `/ru` (Russian) command sets the staff member's
 language preference, stored per Telegram user ID. All subsequent bot
 messages for that user render in the chosen language. No per-order
 language prompt.
+
+(Originally specified as `/til` / `/язык`, but Telegram bot commands only
+permit ASCII `[a-z0-9_]` — a Cyrillic command name cannot be registered at
+all, on Telegram itself, not just in the `python-telegram-bot` library.
+Caught during Task 11's implementation; corrected to `/ru` here to keep
+the spec and the shipped bot in sync.)
 
 ## Configuration / secrets
 

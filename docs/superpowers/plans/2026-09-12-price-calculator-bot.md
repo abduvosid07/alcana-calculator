@@ -876,8 +876,8 @@ TRANSLATIONS = {
         "ru": "Здравствуйте! Отправьте фото или .cdr файл, чтобы рассчитать цену заказа.",
     },
     "choose_language": {
-        "uz": "Tilni tanlang: /til uz yoki /til ru",
-        "ru": "Выберите язык: /язык ru или /язык uz",
+        "uz": "Tilni tanlang: /til (o'zbek) yoki /ru (rus)",
+        "ru": "Выберите язык: /til (узбекский) или /ru (русский)",
     },
     "language_set": {
         "uz": "Til o'zbek tiliga o'rnatildi.",
@@ -1216,10 +1216,16 @@ context.user_data keys:
   extracted_dimensions      {"width_cm", "height_cm"} from the photo vision pass, if confident
   category_id               selected category id (str)
   option_index              selected sub-option index, if the category has options
-  pending_text_purpose      one of "dimensions" | "letters" | "quantity" | "address" -- tells
-                             the single text handler what to do with the next text message
+  pending_text_purpose      one of "dimensions" | "letters" | "quantity" | "address" |
+                             "manual_travel_fee" -- tells the single text handler what
+                             to do with the next text message
   main_item                 the computed LineItem for the primary product
   design_item, travel_item  LineItem or None, filled in during the bundle step
+
+context.user_data is cleared at the start of handle_photo/handle_document (the only
+entry points for a new order) since python-telegram-bot's user_data persists across
+a chat's entire lifetime, not just one order -- without this, a second order in the
+same chat would silently inherit stale dimensions/options from the first.
 ```
 
 - [ ] **Step 1: Write the full bot module**
@@ -1278,6 +1284,7 @@ async def _show_category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, anthropic_client) -> int:
+    context.user_data.clear()
     lang = _lang(context, lang_store, update.effective_user.id)
     photo_file = await update.message.photo[-1].get_file()
     image_bytes = bytes(await photo_file.download_as_bytearray())
@@ -1295,6 +1302,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, soffice_path: str) -> int:
+    context.user_data.clear()
     lang = _lang(context, lang_store, update.effective_user.id)
     document = update.message.document
     context.user_data["extracted_dimensions"] = None
@@ -1512,7 +1520,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
 
     application.add_handler(conversation)
     application.add_handler(CommandHandler("til", lambda u, c: set_language(u, c, lang_store, "uz")))
-    application.add_handler(CommandHandler("язык", lambda u, c: set_language(u, c, lang_store, "ru")))
+    application.add_handler(CommandHandler("ru", lambda u, c: set_language(u, c, lang_store, "ru")))
 
     return application
 ```
