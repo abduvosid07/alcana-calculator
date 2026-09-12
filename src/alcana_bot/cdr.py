@@ -28,7 +28,15 @@ def _to_cm(value_str: str) -> float:
         raise CdrExtractionError(f"Invalid numeric value in SVG dimension: '{value_str}'") from e
 
 def parse_svg_page_size(svg_content: str) -> tuple[float, float]:
-    root = ET.fromstring(svg_content)
+    try:
+        root = ET.fromstring(svg_content)
+    except CdrExtractionError:
+        raise
+    except Exception as e:
+        # Covers ElementTree's ParseError plus defusedxml's DTD/entity
+        # rejections (EntitiesForbidden, DTDForbidden, ...), none of which
+        # the bot handlers would otherwise catch.
+        raise CdrExtractionError(f"Could not parse converted SVG: {type(e).__name__}: {e}") from e
     width = root.get("width")
     height = root.get("height")
     if not width or not height:
@@ -36,10 +44,15 @@ def parse_svg_page_size(svg_content: str) -> tuple[float, float]:
     return _to_cm(width), _to_cm(height)
 
 def convert_cdr_to_svg(cdr_path: str, soffice_path: str, output_dir: str) -> str:
-    result = subprocess.run(
-        [soffice_path, "--headless", "--convert-to", "svg", "--outdir", output_dir, cdr_path],
-        capture_output=True, text=True, timeout=60,
-    )
+    try:
+        result = subprocess.run(
+            [soffice_path, "--headless", "--convert-to", "svg", "--outdir", output_dir, cdr_path],
+            capture_output=True, text=True, timeout=60,
+        )
+    except FileNotFoundError as e:
+        raise CdrExtractionError(f"LibreOffice executable not found at '{soffice_path}'") from e
+    except subprocess.TimeoutExpired as e:
+        raise CdrExtractionError(f"soffice conversion timed out after {e.timeout}s") from e
     if result.returncode != 0:
         raise CdrExtractionError(f"soffice conversion failed: {result.stderr}")
     base_name = os.path.splitext(os.path.basename(cdr_path))[0]

@@ -26,18 +26,25 @@ _LETTERS_PROMPT = (
 
 def _call_vision(client, image_bytes: bytes, media_type: str, prompt: str, required_keys: list[str]) -> dict:
     encoded = base64.b64encode(image_bytes).decode("utf-8")
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=256,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}},
-                {"type": "text", "text": prompt},
-            ],
-        }],
-    )
-    text = response.content[0].text
+    # Broad except on purpose: this is the boundary to an external SDK
+    # (network errors, auth errors, rate limits, empty/non-text content
+    # blocks). Every failure mode here means the same thing to the caller --
+    # fall back to manual entry -- so they all become ExtractionError.
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=256,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        text = response.content[0].text
+    except Exception as e:
+        raise ExtractionError(f"Vision API call failed: {type(e).__name__}: {e}") from e
     try:
         result = json.loads(text)
     except json.JSONDecodeError as e:

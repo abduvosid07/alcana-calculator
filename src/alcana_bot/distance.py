@@ -24,7 +24,14 @@ def geocode_address(address: str, api_key: str) -> tuple[float, float]:
         return float(lat_str), float(lon_str)
     except DistanceError:
         raise
-    except (requests.exceptions.RequestException, KeyError, IndexError, ValueError) as e:
+    except requests.exceptions.RequestException as e:
+        # NEVER interpolate this exception: requests embeds the full prepared
+        # URL (including ?apikey=<secret>) in HTTPError's message, and the
+        # resulting DistanceError text gets logged by the bot handlers.
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        status_part = f" (HTTP {status})" if status is not None else ""
+        raise DistanceError(f"Geocoding '{address}' failed: {type(e).__name__}{status_part}") from e
+    except (KeyError, IndexError, ValueError) as e:
         raise DistanceError(f"Geocoding '{address}' failed: {e}") from e
 
 def haversine_km(origin: tuple, destination: tuple) -> float:

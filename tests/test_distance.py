@@ -51,3 +51,28 @@ def test_geocode_address_http_error_raises_distance_error(mocker):
 
     with pytest.raises(DistanceError, match="Geocoding .* failed"):
         geocode_address("Chilonzor, Tashkent", api_key="fake-key")
+
+def test_geocode_address_error_never_leaks_api_key(mocker):
+    """requests' HTTPError message embeds the full URL incl. ?apikey=<secret>."""
+    secret = "SUPER-SECRET-YANDEX-KEY"
+    mock_get = mocker.patch("alcana_bot.distance.requests.get")
+    mock_get.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        f"403 Client Error: Forbidden for url: "
+        f"https://geocode-maps.yandex.ru/1.x/?apikey={secret}&geocode=Chilonzor&format=json"
+    )
+
+    with pytest.raises(DistanceError) as excinfo:
+        geocode_address("Chilonzor, Tashkent", api_key=secret)
+
+    assert secret not in str(excinfo.value)
+    assert "apikey" not in str(excinfo.value)
+    assert "HTTPError" in str(excinfo.value)
+
+def test_geocode_address_error_includes_status_code_when_available(mocker):
+    mock_get = mocker.patch("alcana_bot.distance.requests.get")
+    error = requests.exceptions.HTTPError("403 Client Error for url: https://x/?apikey=secret")
+    error.response = mocker.Mock(status_code=403)
+    mock_get.return_value.raise_for_status.side_effect = error
+
+    with pytest.raises(DistanceError, match="HTTP 403"):
+        geocode_address("Chilonzor, Tashkent", api_key="secret")
