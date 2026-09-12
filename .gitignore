@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+data/user_lang.json
+*.egg-info/
+.superpowers/
