@@ -29,6 +29,7 @@
 - Create: `requirements.txt`
 - Create: `.env.example`
 - Create: `.gitignore`
+- Create: `pyproject.toml`
 - Create: `src/alcana_bot/__init__.py`
 - Create: `src/alcana_bot/config.py`
 - Test: `tests/test_config.py`
@@ -149,6 +150,7 @@ Expected: PASS (2 tests)
 
 ```bash
 git add requirements.txt .env.example .gitignore pyproject.toml src/alcana_bot/__init__.py src/alcana_bot/config.py tests/test_config.py
+
 git commit -m "feat: add project scaffolding and env config loader"
 ```
 
@@ -1240,7 +1242,7 @@ from alcana_bot.lang_store import LangStore
 from alcana_bot.presentation import build_category_choices, format_quote
 from alcana_bot.pricing import (
     price_fixed, price_fixed_options, price_per_sqm, price_per_sqm_options,
-    price_per_letter_by_height, price_per_unit, resolve_distance_bracket, PricingError,
+    price_per_letter_by_height, price_per_unit, resolve_distance_bracket, PricingError, LineItem,
 )
 from alcana_bot.bundle import assemble_bundle
 from alcana_bot.vision import extract_dimensions_from_image, extract_letter_spec_from_image, ExtractionError
@@ -1411,6 +1413,12 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if purpose == "address":
             lat, lon = geocode_address(text, config.yandex_maps_api_key)
             return await _finish_distance_step(update, context, price_list, lang_store, (lat, lon))
+
+        if purpose == "manual_travel_fee":
+            manual_price = int(text.replace(" ", ""))
+            travel_category = price_list.categories["install_travel_fee"]
+            travel_item = LineItem(label=travel_category.id, detail="вручную / qo'lda", unit_price=manual_price, quantity=1, total=manual_price)
+            return await _send_final_quote(update, context, lang_store, travel_item)
     except (ValueError, PricingError, DistanceError) as e:
         logger.info("Could not parse/compute from text input (purpose=%s): %s", purpose, e)
         await update.message.reply_text(t("extraction_failed_fallback", lang))
@@ -1449,6 +1457,13 @@ async def handle_bundle_choice(update: Update, context: ContextTypes.DEFAULT_TYP
     return AWAITING_TEXT_INPUT
 
 
+async def _send_final_quote(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore, travel_item) -> int:
+    lang = _lang(context, lang_store, update.effective_user.id)
+    items = assemble_bundle(context.user_data["main_item"], context.user_data.get("design_item"), travel_item)
+    await update.effective_chat.send_message(format_quote(items, lang))
+    return AWAITING_FILE
+
+
 async def _finish_distance_step(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, destination: tuple) -> int:
     lang = _lang(context, lang_store, update.effective_user.id)
     origin = (price_list.workshop_origin["latitude"], price_list.workshop_origin["longitude"])
@@ -1458,12 +1473,14 @@ async def _finish_distance_step(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         travel_item = resolve_distance_bracket(travel_category, distance_km)
     except PricingError as e:
-        logger.info("Distance bracket resolution failed: %s", e)
-        travel_item = None
+        # Never silently drop the travel fee (Global Constraint) -- ask staff
+        # to type it manually instead of guessing or omitting it.
+        logger.info("Distance bracket resolution failed, falling back to manual entry: %s", e)
+        context.user_data["pending_text_purpose"] = "manual_travel_fee"
+        await update.effective_chat.send_message(t("extraction_failed_fallback", lang))
+        return AWAITING_TEXT_INPUT
 
-    items = assemble_bundle(context.user_data["main_item"], context.user_data.get("design_item"), travel_item)
-    await update.effective_chat.send_message(format_quote(items, lang))
-    return AWAITING_FILE
+    return await _send_final_quote(update, context, lang_store, travel_item)
 
 
 def build_application(config: Config, price_list: PriceList, lang_store: LangStore, anthropic_client, soffice_path: str) -> Application:
