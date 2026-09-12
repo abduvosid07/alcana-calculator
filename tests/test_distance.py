@@ -3,13 +3,10 @@ import requests
 from alcana_bot.distance import geocode_address, haversine_km, estimate_driving_km, DistanceError
 
 SAMPLE_GEOCODE_RESPONSE = {
-    "response": {
-        "GeoObjectCollection": {
-            "featureMember": [
-                {"GeoObject": {"Point": {"pos": "69.240562 41.311081"}}}
-            ]
-        }
-    }
+    "status": "OK",
+    "results": [
+        {"geometry": {"location": {"lat": 41.311081, "lng": 69.240562}}}
+    ],
 }
 
 def test_geocode_address_parses_lat_lon(mocker):
@@ -24,11 +21,19 @@ def test_geocode_address_parses_lat_lon(mocker):
 
 def test_geocode_address_no_results_raises(mocker):
     mock_get = mocker.patch("alcana_bot.distance.requests.get")
-    mock_get.return_value.json.return_value = {"response": {"GeoObjectCollection": {"featureMember": []}}}
+    mock_get.return_value.json.return_value = {"status": "ZERO_RESULTS", "results": []}
     mock_get.return_value.raise_for_status = lambda: None
 
-    with pytest.raises(DistanceError, match="no results"):
+    with pytest.raises(DistanceError, match="ZERO_RESULTS"):
         geocode_address("nonexistent place asdkjashd", api_key="fake-key")
+
+def test_geocode_address_non_ok_status_raises(mocker):
+    mock_get = mocker.patch("alcana_bot.distance.requests.get")
+    mock_get.return_value.json.return_value = {"status": "REQUEST_DENIED", "results": []}
+    mock_get.return_value.raise_for_status = lambda: None
+
+    with pytest.raises(DistanceError, match="REQUEST_DENIED"):
+        geocode_address("Chilonzor, Tashkent", api_key="bad-key")
 
 def test_haversine_km_known_distance():
     # Workshop origin to a point ~2km away (rough check, not exact)
@@ -53,24 +58,24 @@ def test_geocode_address_http_error_raises_distance_error(mocker):
         geocode_address("Chilonzor, Tashkent", api_key="fake-key")
 
 def test_geocode_address_error_never_leaks_api_key(mocker):
-    """requests' HTTPError message embeds the full URL incl. ?apikey=<secret>."""
-    secret = "SUPER-SECRET-YANDEX-KEY"
+    """requests' HTTPError message embeds the full URL incl. ?key=<secret>."""
+    secret = "SUPER-SECRET-GOOGLE-KEY"
     mock_get = mocker.patch("alcana_bot.distance.requests.get")
     mock_get.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
         f"403 Client Error: Forbidden for url: "
-        f"https://geocode-maps.yandex.ru/1.x/?apikey={secret}&geocode=Chilonzor&format=json"
+        f"https://maps.googleapis.com/maps/api/geocode/json?address=Chilonzor&key={secret}"
     )
 
     with pytest.raises(DistanceError) as excinfo:
         geocode_address("Chilonzor, Tashkent", api_key=secret)
 
     assert secret not in str(excinfo.value)
-    assert "apikey" not in str(excinfo.value)
+    assert "key=" not in str(excinfo.value)
     assert "HTTPError" in str(excinfo.value)
 
 def test_geocode_address_error_includes_status_code_when_available(mocker):
     mock_get = mocker.patch("alcana_bot.distance.requests.get")
-    error = requests.exceptions.HTTPError("403 Client Error for url: https://x/?apikey=secret")
+    error = requests.exceptions.HTTPError("403 Client Error for url: https://x/?key=secret")
     error.response = mocker.Mock(status_code=403)
     mock_get.return_value.raise_for_status.side_effect = error
 

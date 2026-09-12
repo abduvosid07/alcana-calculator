@@ -11,9 +11,15 @@ for the full design rationale.
   binary, used to read page dimensions from `.cdr` files — CorelDraw is not
   required and is not installed on the deployment server)
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
-  (separate from any Claude.ai/Claude Code subscription — billed per token)
-- A Yandex Maps API key (free tier) from [developer.tech.yandex.ru](https://developer.tech.yandex.ru/)
+- A Gemini API key from [ai.studio/projects](https://ai.studio/projects) — note
+  this uses its own separate **prepaid credit balance**, distinct from your
+  Google Cloud Console billing account even within the same project. Add
+  credit there specifically (a few dollars covers a very high order volume
+  at this bot's usage level), not just on the Cloud Console billing page.
+- A Google Maps (Geocoding API) key from [console.cloud.google.com](https://console.cloud.google.com)
+  (enable "Geocoding API" for your project, then create a key under
+  APIs & Services → Credentials — this one *does* use standard Cloud
+  billing/free credit, unlike the Gemini key above)
 
 ## Setup
 
@@ -36,8 +42,8 @@ Run continuously on the Schneider server using NSSM (Non-Sucking Service Manager
 1. Download NSSM, run `nssm install AlcanaBot`.
 2. Set the application path to your Python interpreter and arguments to
    `-m alcana_bot.main`, with "Startup directory" set to this project folder.
-3. Under the "Environment" tab, add `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`,
-   `YANDEX_MAPS_API_KEY`, and `SOFFICE_PATH` (or keep using `.env` in the
+3. Under the "Environment" tab, add `TELEGRAM_BOT_TOKEN`, `GOOGLE_GEMINI_API_KEY`,
+   `GOOGLE_MAPS_API_KEY`, and `SOFFICE_PATH` (or keep using `.env` in the
    startup directory — `python-dotenv` loads it automatically).
 4. Start the service: `nssm start AlcanaBot`. It will now run in the
    background and restart automatically on reboot or crash.

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-REQUIRED_VARS = ["TELEGRAM_BOT_TOKEN", "ANTHROPIC_API_KEY", "YANDEX_MAPS_API_KEY"]
+REQUIRED_VARS = ["TELEGRAM_BOT_TOKEN", "GOOGLE_GEMINI_API_KEY", "GOOGLE_MAPS_API_KEY"]
 
 class ConfigError(Exception):
     pass
@@ -8,8 +8,8 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class Config:
     telegram_bot_token: str
-    anthropic_api_key: str
-    yandex_maps_api_key: str
+    google_gemini_api_key: str
+    google_maps_api_key: str
 
 def load_config(env: dict) -> Config:
     missing = [name for name in REQUIRED_VARS if not env.get(name)]
@@ -17,6 +17,6 @@ def load_config(env: dict) -> Config:
         raise ConfigError(f"Missing required environment variables: {', '.join(missing)}")
     return Config(
         telegram_bot_token=env["TELEGRAM_BOT_TOKEN"],
-        anthropic_api_key=env["ANTHROPIC_API_KEY"],
-        yandex_maps_api_key=env["YANDEX_MAPS_API_KEY"],
+        google_gemini_api_key=env["GOOGLE_GEMINI_API_KEY"],
+        google_maps_api_key=env["GOOGLE_MAPS_API_KEY"],
     )

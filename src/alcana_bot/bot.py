@@ -63,7 +63,7 @@ async def _show_category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     return AWAITING_CATEGORY
 
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, anthropic_client) -> int:
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client) -> int:
     context.user_data.clear()
     lang = _lang(context, lang_store, update.effective_user.id)
     photo_file = await update.message.photo[-1].get_file()
@@ -74,7 +74,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
     try:
         # Synchronous SDK call -- off the event loop so one slow vision
         # request doesn't freeze the bot for every other staff member.
-        result = await asyncio.to_thread(extract_dimensions_from_image, anthropic_client, image_bytes, "image/jpeg")
+        result = await asyncio.to_thread(extract_dimensions_from_image, vision_client, image_bytes, "image/jpeg")
         context.user_data["extracted_dimensions"] = {"width_cm": result["width_cm"], "height_cm": result["height_cm"]}
     except ExtractionError as e:
         logger.info("Photo dimension extraction failed, will fall back to manual entry: %s", e)
@@ -112,7 +112,7 @@ async def _ask_piece_count(update: Update, context: ContextTypes.DEFAULT_TYPE, l
     return AWAITING_TEXT_INPUT
 
 
-async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, anthropic_client) -> int:
+async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client) -> int:
     query = update.callback_query
     await query.answer()
     lang = _lang(context, lang_store, update.effective_user.id)
@@ -131,7 +131,7 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
         if image_bytes:
             try:
                 spec = await asyncio.to_thread(
-                    extract_letter_spec_from_image, anthropic_client, image_bytes, context.user_data["media_type"]
+                    extract_letter_spec_from_image, vision_client, image_bytes, context.user_data["media_type"]
                 )
                 item = price_per_letter_by_height(category, letter_count=spec["letter_count"], height_cm=spec["height_cm"])
                 return await _finish_main_item(update, context, price_list, lang_store, item)
@@ -228,7 +228,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if purpose == "address":
             try:
                 # Synchronous HTTP call -- keep it off the event loop.
-                lat, lon = await asyncio.to_thread(geocode_address, text, config.yandex_maps_api_key)
+                lat, lon = await asyncio.to_thread(geocode_address, text, config.google_maps_api_key)
             except DistanceError as e:
                 # Spec: a failed geocode falls back to picking the nearest km
                 # bracket manually, not to free-text guessing.
@@ -396,7 +396,7 @@ async def _finish_distance_step(update: Update, context: ContextTypes.DEFAULT_TY
     return await _send_final_quote(update, context, price_list, lang_store, travel_item)
 
 
-def build_application(config: Config, price_list: PriceList, lang_store: LangStore, anthropic_client, soffice_path: str) -> Application:
+def build_application(config: Config, price_list: PriceList, lang_store: LangStore, vision_client, soffice_path: str) -> Application:
     application = Application.builder().token(config.telegram_bot_token).build()
 
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -421,11 +421,11 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
         entry_points=[CommandHandler("start", lambda u, c: start(u, c, lang_store))],
         states={
             AWAITING_FILE: [
-                MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, anthropic_client)),
+                MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
                 MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
             ],
             AWAITING_CATEGORY: [
-                CallbackQueryHandler(lambda u, c: handle_category_selected(u, c, price_list, lang_store, anthropic_client), pattern=r"^cat:"),
+                CallbackQueryHandler(lambda u, c: handle_category_selected(u, c, price_list, lang_store, vision_client), pattern=r"^cat:"),
             ],
             AWAITING_OPTION: [
                 CallbackQueryHandler(lambda u, c: handle_option_selected(u, c, price_list, lang_store), pattern=r"^opt:"),

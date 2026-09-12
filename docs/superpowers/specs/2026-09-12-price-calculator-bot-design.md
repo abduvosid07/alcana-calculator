@@ -2,6 +2,24 @@
 
 Status: approved by user 2026-09-12, pending write-up into implementation plan.
 
+**Post-implementation provider swap (2026-09-12, during deployment prep):**
+Both external providers named below changed from what's described in this
+spec, purely for practical billing reasons discovered while setting up real
+credentials — the technical design (what each provider is used for, the
+fallback behavior, the "never silently guess" requirement) is unchanged:
+- **Vision/extraction:** Claude Haiku 4.5 → **Gemini 3.6 Flash** (Google).
+  The user wanted to avoid juggling a third separate billing account
+  alongside the two Google ones already needed for geocoding — consolidating
+  onto Google covers both with one provider. Model string, prompts, and the
+  confidence-threshold/fallback logic are otherwise the same shape.
+- **Geocoding:** Yandex Maps API → **Google Geocoding API**. Yandex's free
+  tier terms turned out to explicitly prohibit use in a non-public/internal
+  app (discovered when actually reading their current ToS during setup —
+  the "free tier" note below is stale), and their paid tier costs
+  ₽195,000+/year, disproportionate for this bot's volume. Google's
+  Geocoding API has no such "must be public" restriction and a genuine
+  free-usage tier suited to low-volume internal tools.
+
 ## Purpose
 
 Alcana's designers/sales staff currently calculate advertising order prices

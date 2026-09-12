@@ -1,10 +1,10 @@
-import base64
 import json
+from google.genai import types
 
 class ExtractionError(Exception):
     pass
 
-MODEL = "claude-haiku-4-5"
+MODEL = "gemini-3.6-flash"
 CONFIDENCE_THRESHOLD = 0.6
 
 _DIMENSIONS_PROMPT = (
@@ -24,27 +24,38 @@ _LETTERS_PROMPT = (
     '<number>, "confidence": <0-1>}. Set confidence low if unclear.'
 )
 
+def _strip_code_fence(text: str) -> str:
+    # Gemini (unlike Claude) sometimes wraps JSON in a ```json ... ``` block
+    # despite being told to reply with only JSON -- strip that if present.
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`")
+        if stripped.startswith("json"):
+            stripped = stripped[4:]
+    return stripped.strip()
+
 def _call_vision(client, image_bytes: bytes, media_type: str, prompt: str, required_keys: list[str]) -> dict:
-    encoded = base64.b64encode(image_bytes).decode("utf-8")
     # Broad except on purpose: this is the boundary to an external SDK
-    # (network errors, auth errors, rate limits, empty/non-text content
-    # blocks). Every failure mode here means the same thing to the caller --
+    # (network errors, auth errors, rate limits, empty/missing text on the
+    # response). Every failure mode here means the same thing to the caller --
     # fall back to manual entry -- so they all become ExtractionError.
     try:
-        response = client.messages.create(
+        response = client.models.generate_content(
             model=MODEL,
-            max_tokens=256,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=media_type),
+                prompt,
+            ],
         )
-        text = response.content[0].text
+        text = response.text
     except Exception as e:
         raise ExtractionError(f"Vision API call failed: {type(e).__name__}: {e}") from e
+
+    if not text:
+        raise ExtractionError("Vision API returned an empty response")
+
+    text = _strip_code_fence(text)
+
     try:
         result = json.loads(text)
     except json.JSONDecodeError as e:

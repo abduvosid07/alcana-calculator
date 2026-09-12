@@ -64,7 +64,7 @@ def make_text_update(text):
     )
 
 
-FAKE_CONFIG = Config(telegram_bot_token="1:AA", anthropic_api_key="k", yandex_maps_api_key="y")
+FAKE_CONFIG = Config(telegram_bot_token="1:AA", google_gemini_api_key="k", google_maps_api_key="y")
 
 
 def _all_text(update):

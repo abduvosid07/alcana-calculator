@@ -4,32 +4,29 @@ import requests
 class DistanceError(Exception):
     pass
 
-GEOCODE_URL = "https://geocode-maps.yandex.ru/1.x/"
+GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 def geocode_address(address: str, api_key: str) -> tuple[float, float]:
     try:
         response = requests.get(GEOCODE_URL, params={
-            "apikey": api_key,
-            "geocode": address,
-            "format": "json",
-            "results": 1,
+            "address": address,
+            "key": api_key,
         }, timeout=10)
         response.raise_for_status()
         data = response.json()
-        members = data["response"]["GeoObjectCollection"]["featureMember"]
-        if not members:
-            raise DistanceError(f"Geocoding '{address}' returned no results")
-        pos = members[0]["GeoObject"]["Point"]["pos"]  # "lon lat"
-        lon_str, lat_str = pos.split(" ")
-        return float(lat_str), float(lon_str)
+        status = data.get("status")
+        if status != "OK":
+            raise DistanceError(f"Geocoding '{address}' returned status {status}")
+        location = data["results"][0]["geometry"]["location"]
+        return float(location["lat"]), float(location["lng"])
     except DistanceError:
         raise
     except requests.exceptions.RequestException as e:
         # NEVER interpolate this exception: requests embeds the full prepared
-        # URL (including ?apikey=<secret>) in HTTPError's message, and the
+        # URL (including ?key=<secret>) in HTTPError's message, and the
         # resulting DistanceError text gets logged by the bot handlers.
-        status = getattr(getattr(e, "response", None), "status_code", None)
-        status_part = f" (HTTP {status})" if status is not None else ""
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        status_part = f" (HTTP {status_code})" if status_code is not None else ""
         raise DistanceError(f"Geocoding '{address}' failed: {type(e).__name__}{status_part}") from e
     except (KeyError, IndexError, ValueError) as e:
         raise DistanceError(f"Geocoding '{address}' failed: {e}") from e
