@@ -17,7 +17,10 @@ def price_fixed(category: Category) -> LineItem:
     return LineItem(label=category.id, detail="", unit_price=category.price, quantity=1, total=category.price)
 
 def price_fixed_options(category: Category, option_index: int) -> LineItem:
-    option = category.options[option_index]
+    try:
+        option = category.options[option_index]
+    except IndexError:
+        raise PricingError(f"{category.id}: option_index {option_index} out of range (options available: {len(category.options)})")
     price = option["price"]
     return LineItem(label=category.id, detail=option.get("label", ""), unit_price=price, quantity=1, total=price)
 
@@ -30,14 +33,21 @@ def price_per_sqm(category: Category, width_cm: float, height_cm: float) -> Line
     return LineItem(label=category.id, detail=f"{width_cm}x{height_cm} см", unit_price=category.price, quantity=area, total=total)
 
 def price_per_sqm_options(category: Category, option_index: int, width_cm: float, height_cm: float) -> LineItem:
-    option = category.options[option_index]
+    try:
+        option = category.options[option_index]
+    except IndexError:
+        raise PricingError(f"{category.id}: option_index {option_index} out of range (options available: {len(category.options)})")
     area = _area_sqm(width_cm, height_cm)
     unit_price = option["price_per_sqm"]
     total = round(area * unit_price)
     return LineItem(label=category.id, detail=f"{option.get('label', '')} {width_cm}x{height_cm} см", unit_price=unit_price, quantity=area, total=total)
 
 def price_per_letter_by_height(category: Category, letter_count: int, height_cm: float) -> LineItem:
+    if category.height_prices is None:
+        raise PricingError(f"{category.id}: has no height_prices configured")
     brackets = sorted(category.height_prices, key=lambda hp: hp["height_cm"])
+    if not brackets:
+        raise PricingError(f"{category.id}: has no height_prices configured")
     match = next((hp for hp in brackets if hp["height_cm"] >= height_cm), None)
     if match is None:
         raise PricingError(f"{category.id}: no price bracket covers height {height_cm}cm (max is {brackets[-1]['height_cm']}cm)")
@@ -49,6 +59,8 @@ def price_per_unit(category: Category, quantity: float) -> LineItem:
     return LineItem(label=category.id, detail=f"{quantity} {category.unit}", unit_price=category.price, quantity=quantity, total=total)
 
 def resolve_distance_bracket(category: Category, distance_km: float) -> LineItem:
+    if category.brackets is None:
+        raise PricingError(f"{category.id}: has no distance brackets configured")
     match = next((b for b in category.brackets if b["min_km"] <= distance_km <= b["max_km"]), None)
     if match is None:
         raise PricingError(f"{category.id}: no distance bracket covers {distance_km}km")
