@@ -1,4 +1,5 @@
 import pytest
+import requests
 from alcana_bot.distance import geocode_address, haversine_km, estimate_driving_km, DistanceError
 
 SAMPLE_GEOCODE_RESPONSE = {
@@ -42,3 +43,11 @@ def test_estimate_driving_km_applies_road_factor():
     straight = haversine_km(origin, destination)
     driving = estimate_driving_km(origin, destination)
     assert driving == pytest.approx(straight * 1.3, rel=1e-6)
+
+def test_geocode_address_http_error_raises_distance_error(mocker):
+    """Verify that HTTP errors are converted to DistanceError, not propagated raw."""
+    mock_get = mocker.patch("alcana_bot.distance.requests.get")
+    mock_get.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
+
+    with pytest.raises(DistanceError, match="Geocoding .* failed"):
+        geocode_address("Chilonzor, Tashkent", api_key="fake-key")
