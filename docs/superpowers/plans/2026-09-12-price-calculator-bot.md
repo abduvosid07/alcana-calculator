@@ -57,6 +57,7 @@ __pycache__/
 .env
 data/user_lang.json
 *.egg-info/
+.superpowers/
 ```
 
 `.env.example`:
