@@ -13,16 +13,29 @@ class LineItem:
     quantity: float
     total: int
 
-def price_fixed(category: Category) -> LineItem:
-    return LineItem(label=category.id, detail="", unit_price=category.price, quantity=1, total=category.price)
+def price_fixed(category: Category, quantity: int = 1) -> LineItem:
+    if category.price is None:
+        raise PricingError(f"{category.id}: has no price configured")
+    if quantity < 1:
+        raise PricingError(f"{category.id}: quantity must be at least 1 (got {quantity})")
+    return LineItem(
+        label=category.id,
+        detail=f"{quantity} шт",
+        unit_price=category.price,
+        quantity=quantity,
+        total=category.price * quantity,
+    )
 
-def price_fixed_options(category: Category, option_index: int) -> LineItem:
+def price_fixed_options(category: Category, option_index: int, quantity: int = 1) -> LineItem:
     try:
         option = category.options[option_index]
     except IndexError:
         raise PricingError(f"{category.id}: option_index {option_index} out of range (options available: {len(category.options)})")
+    if quantity < 1:
+        raise PricingError(f"{category.id}: quantity must be at least 1 (got {quantity})")
     price = option["price"]
-    return LineItem(label=category.id, detail=option.get("label", ""), unit_price=price, quantity=1, total=price)
+    detail = f"{option.get('label', '')} — {quantity} шт".strip(" —")
+    return LineItem(label=category.id, detail=detail, unit_price=price, quantity=quantity, total=price * quantity)
 
 def _area_sqm(width_cm: float, height_cm: float) -> float:
     return (width_cm / 100.0) * (height_cm / 100.0)

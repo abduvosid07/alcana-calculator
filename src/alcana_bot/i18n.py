@@ -38,9 +38,53 @@ TRANSLATIONS = {
         "uz": "Mijoz manzilini yozing yoki Telegram orqali joylashuvni yuboring:",
         "ru": "Напишите адрес клиента или отправьте геолокацию через Telegram:",
     },
+    "enter_piece_count": {
+        "uz": "Nechta dona kerak? Sonini kiriting (bitta dona uchun 1 deb yozing):",
+        "ru": "Сколько штук? Введите количество (для одной штуки напишите 1):",
+    },
     "ask_bundle_confirmation": {
-        "uz": "Taklif: mahsulot + dizayn xizmati + montaj/yo'l harajati. Barchasini qoldiraymi?",
-        "ru": "Предложение: товар + услуга дизайна + монтаж/выезд. Оставить всё как есть?",
+        "uz": "Taklifga nimalar kirsin? Kerakmaganini bosib o'chiring, so'ng tasdiqlang:",
+        "ru": "Что включить в предложение? Нажмите, чтобы убрать ненужное, затем подтвердите:",
+    },
+    "bundle_design_included": {
+        "uz": "Dizayn: ✅ qo'shilgan",
+        "ru": "Дизайн: ✅ включено",
+    },
+    "bundle_design_excluded": {
+        "uz": "Dizayn: ❌ olib tashlandi",
+        "ru": "Дизайн: ❌ убрано",
+    },
+    "bundle_travel_included": {
+        "uz": "Montaj/yo'l: ✅ qo'shilgan",
+        "ru": "Монтаж/выезд: ✅ включено",
+    },
+    "bundle_travel_excluded": {
+        "uz": "Montaj/yo'l: ❌ olib tashlandi",
+        "ru": "Монтаж/выезд: ❌ убрано",
+    },
+    "bundle_confirm": {
+        "uz": "Tasdiqlash",
+        "ru": "Подтвердить",
+    },
+    "choose_travel_bracket": {
+        "uz": "Manzilni aniqlab bo'lmadi. Eng yaqin masofa oralig'ini tanlang:",
+        "ru": "Не удалось определить адрес. Выберите ближайший интервал расстояния:",
+    },
+    "travel_bracket_button": {
+        "uz": "{min_km}-{max_km} km — {price} so'm",
+        "ru": "{min_km}-{max_km} км — {price} сум",
+    },
+    "enter_travel_fee_manually": {
+        "uz": "Chiqish (montaj) narxini qo'lda kiriting, so'mda (faqat raqam):",
+        "ru": "Введите стоимость выезда вручную, в сумах (только число):",
+    },
+    "category_misconfigured": {
+        "uz": "Bu mahsulot narxlar ro'yxatida to'g'ri sozlanmagan. Iltimos, botni boshqaruvchi mutaxassisga murojaat qiling.",
+        "ru": "Этот товар настроен в прайс-листе некорректно. Пожалуйста, сообщите специалисту, который обслуживает бота.",
+    },
+    "unexpected_error": {
+        "uz": "Kutilmagan xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring yoki /start bosing.",
+        "ru": "Произошла непредвиденная ошибка. Пожалуйста, попробуйте ещё раз или нажмите /start.",
     },
     "quote_line_item": {
         "uz": "{label}: {detail} — {total} so'm",

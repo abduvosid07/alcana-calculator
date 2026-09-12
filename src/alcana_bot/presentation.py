@@ -5,16 +5,32 @@ from alcana_bot.i18n import t
 
 _ADDON_CATEGORY_IDS = {"measurement_fee", "install_travel_fee"}
 
-def build_category_choices(price_list: PriceList) -> list[tuple[str, str]]:
+def build_category_choices(price_list: PriceList, lang: str) -> list[tuple[str, str]]:
     return [
-        (category_id, category_id.replace("_", " ").title())
-        for category_id in price_list.categories
+        (category.id, category.display_name(lang))
+        for category_id, category in price_list.categories.items()
         if category_id not in _ADDON_CATEGORY_IDS
     ]
 
-def format_quote(items: list[LineItem], lang: str) -> str:
+def _resolve_label(price_list: PriceList, label: str, lang: str) -> str:
+    """Turn a LineItem's category id into the real price-list product name.
+
+    Labels are stored as category ids (language-neutral) so the same quote can
+    be rendered in either language; the display name is resolved here, at the
+    point where the language is actually known.
+    """
+    category = price_list.categories.get(label)
+    return category.display_name(lang) if category is not None else label
+
+def format_quote(items: list[LineItem], lang: str, price_list: PriceList) -> str:
     lines = [
-        t("quote_line_item", lang, label=item.label, detail=item.detail, total=f"{item.total:,}".replace(",", " "))
+        t(
+            "quote_line_item",
+            lang,
+            label=_resolve_label(price_list, item.label, lang),
+            detail=item.detail,
+            total=f"{item.total:,}".replace(",", " "),
+        )
         for item in items
     ]
     total = bundle_total(items)

@@ -15,12 +15,44 @@ def test_price_fixed():
     assert isinstance(item.total, int)
     assert item.quantity == 1
 
+def test_price_fixed_with_quantity_scales_total():
+    """An order for 10 roll-ups must quote 10x, not 1x."""
+    category = PRICE_LIST.categories["rollup_200x80"]
+    item = price_fixed(category, quantity=10)
+    assert item.unit_price == 650000
+    assert item.quantity == 10
+    assert item.total == 6500000
+    assert isinstance(item.total, int)
+    assert "10" in item.detail
+
+def test_price_fixed_missing_price_raises():
+    from alcana_bot.price_data import Category
+    category = Category(id="test_no_price", pricing_type="fixed", unit="pc", price=None)
+    with pytest.raises(PricingError, match="has no price configured"):
+        price_fixed(category)
+
+def test_price_fixed_zero_quantity_raises():
+    category = PRICE_LIST.categories["rollup_200x80"]
+    with pytest.raises(PricingError, match="quantity must be at least 1"):
+        price_fixed(category, quantity=0)
+
 def test_price_fixed_options():
     category = PRICE_LIST.categories["standee"]
     item = price_fixed_options(category, option_index=2)
     assert item.total == 1100000
+    assert item.quantity == 1
     assert isinstance(item.total, int)
     assert "Алюкабонд" in item.detail
+
+def test_price_fixed_options_with_quantity_scales_total():
+    category = PRICE_LIST.categories["standee"]
+    item = price_fixed_options(category, option_index=2, quantity=3)
+    assert item.unit_price == 1100000
+    assert item.quantity == 3
+    assert item.total == 3300000
+    assert isinstance(item.total, int)
+    assert "Алюкабонд" in item.detail
+    assert "3" in item.detail
 
 def test_price_per_sqm():
     category = PRICE_LIST.categories["banner_300gr"]
