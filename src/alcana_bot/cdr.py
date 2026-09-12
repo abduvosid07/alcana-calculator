@@ -22,7 +22,10 @@ def _to_cm(value_str: str) -> float:
     unit = unit or "px"
     if unit not in _UNIT_TO_CM:
         raise CdrExtractionError(f"Unsupported SVG unit: '{unit}'")
-    return float(number) * _UNIT_TO_CM[unit]
+    try:
+        return float(number) * _UNIT_TO_CM[unit]
+    except ValueError as e:
+        raise CdrExtractionError(f"Invalid numeric value in SVG dimension: '{value_str}'") from e
 
 def parse_svg_page_size(svg_content: str) -> tuple[float, float]:
     root = ET.fromstring(svg_content)

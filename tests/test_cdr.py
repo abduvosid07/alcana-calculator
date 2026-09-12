@@ -25,3 +25,9 @@ def test_parse_svg_page_size_missing_dimensions_raises():
     svg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
     with pytest.raises(CdrExtractionError, match="width/height"):
         parse_svg_page_size(svg)
+
+def test_parse_svg_page_size_malformed_numeric_value_raises():
+    # Malformed numeric value like "1.2.3cm" passes regex but fails float()
+    svg = '<svg width="1.2.3cm" height="80mm" xmlns="http://www.w3.org/2000/svg"></svg>'
+    with pytest.raises(CdrExtractionError, match="Invalid numeric value"):
+        parse_svg_page_size(svg)
