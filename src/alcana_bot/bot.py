@@ -51,6 +51,7 @@ async def _show_category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, anthropic_client) -> int:
+    context.user_data.clear()
     lang = _lang(context, lang_store, update.effective_user.id)
     photo_file = await update.message.photo[-1].get_file()
     image_bytes = bytes(await photo_file.download_as_bytearray())
@@ -68,6 +69,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, soffice_path: str) -> int:
+    context.user_data.clear()
     lang = _lang(context, lang_store, update.effective_user.id)
     document = update.message.document
     context.user_data["extracted_dimensions"] = None
@@ -285,6 +287,6 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
 
     application.add_handler(conversation)
     application.add_handler(CommandHandler("til", lambda u, c: set_language(u, c, lang_store, "uz")))
-    application.add_handler(CommandHandler("язык", lambda u, c: set_language(u, c, lang_store, "ru")))
+    application.add_handler(CommandHandler("ru", lambda u, c: set_language(u, c, lang_store, "ru")))
 
     return application

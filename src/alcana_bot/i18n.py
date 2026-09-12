@@ -7,8 +7,8 @@ TRANSLATIONS = {
         "ru": "Здравствуйте! Отправьте фото или .cdr файл, чтобы рассчитать цену заказа.",
     },
     "choose_language": {
-        "uz": "Tilni tanlang: /til uz yoki /til ru",
-        "ru": "Выберите язык: /язык ru или /язык uz",
+        "uz": "Tilni tanlang: /til (o'zbek) yoki /ru (rus)",
+        "ru": "Выберите язык: /til (узбекский) или /ru (русский)",
     },
     "language_set": {
         "uz": "Til o'zbek tiliga o'rnatildi.",
