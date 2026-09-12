@@ -1,0 +1,186 @@
+{
+  "_meta": {
+    "source": "Прайс 10.09.2026 NEW.pdf",
+    "currency": "UZS",
+    "last_updated": "2026-09-10",
+    "note": "Edit this file directly when prices change. No code changes needed for a pure price update."
+  },
+  "categories": [
+    {
+      "id": "measurement_fee",
+      "name_ru": "Выезд на замер",
+      "name_uz": "Размер олиш",
+      "pricing_type": "fixed_options",
+      "unit": "flat",
+      "requires_dimensions": false,
+      "options": [
+        { "label_ru": "В городе Ташкент", "label_uz": "Тошкент шаҳрида", "price": 100000 },
+        { "label_ru": "За пределами Ташкента", "label_uz": "Тошкент шаҳридан ташқарида", "price": 300000 }
+      ]
+    },
+    {
+      "id": "install_travel_fee",
+      "name_ru": "Выезд на установку (по расстоянию)",
+      "name_uz": "Установкага йўл кира харажати",
+      "pricing_type": "distance_bracket",
+      "unit": "flat",
+      "requires_dimensions": false,
+      "note": "v1: bot computes distance via Yandex Maps from the fixed workshop origin, then picks the matching bracket automatically instead of asking staff to pick a bracket manually.",
+      "brackets": [
+        { "min_km": 1, "max_km": 10, "price": 100000 },
+        { "min_km": 10, "max_km": 20, "price": 150000 },
+        { "min_km": 20, "max_km": 30, "price": 200000 },
+        { "min_km": 30, "max_km": 40, "price": 250000 },
+        { "min_km": 40, "max_km": 50, "price": 300000 },
+        { "min_km": 50, "max_km": 60, "price": 350000 },
+        { "min_km": 60, "max_km": 70, "price": 400000 },
+        { "min_km": 70, "max_km": 100, "price": 500000 }
+      ]
+    },
+    { "id": "lightbox_rr_60b", "name": "LIGHTBOX RR 60B 60x60 см", "pricing_type": "fixed", "unit": "pc", "price": 1150000, "requires_dimensions": false },
+    { "id": "lightbox_tr_60a", "name": "LIGHTBOX TR 60A 60x60 см", "pricing_type": "fixed", "unit": "pc", "price": 1290000, "requires_dimensions": false },
+    { "id": "slimbox_80x60", "name": "SLIMBOX 80x60 см", "pricing_type": "fixed", "unit": "pc", "price": 850000, "requires_dimensions": false },
+    { "id": "slimbox_120x80", "name": "SLIMBOX 120x80 см", "pricing_type": "fixed", "unit": "pc", "price": 1050000, "requires_dimensions": false },
+    { "id": "shtender_slimbox_80x60", "name": "SHTENDER SLIMBOX 80x60 см (аккумуляторсиз)", "pricing_type": "fixed", "unit": "pc", "price": 1100000, "requires_dimensions": false },
+    { "id": "shtender_slimbox_120x60", "name": "SHTENDER SLIMBOX 120x60 см", "pricing_type": "fixed", "unit": "pc", "price": 1550000, "requires_dimensions": false },
+    { "id": "shiftbox_120x45", "name": "SHIFTBOX 120x45 см", "pricing_type": "fixed", "unit": "pc", "price": 1050000, "requires_dimensions": false },
+    { "id": "fabric_lightbox", "name": "Тканевые лайтбокс", "pricing_type": "per_sqm", "unit": "sqm", "price": 1850000, "requires_dimensions": true },
+    { "id": "spider_stand_160x60", "name": "Паучок 160x60 см (Бэк лит)", "pricing_type": "fixed", "unit": "pc", "price": 250000, "requires_dimensions": false },
+    { "id": "rollup_200x80", "name": "Ролл апп 200x80 см (Бэк лит)", "pricing_type": "fixed", "unit": "pc", "price": 650000, "requires_dimensions": false, "note": "PDF shows quantity range 1-10 шт; treated as flat per-piece price. Confirm if bulk quantity should discount." },
+    { "id": "banner_300gr", "name": "Баннер 300 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 30000, "requires_dimensions": true },
+    { "id": "oracal_vinyl_140gr", "name": "Печать оракал (винил) 140 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 35000, "requires_dimensions": true },
+    { "id": "oracal_mesh_140gr", "name": "Сеткали оракал 140 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 45000, "requires_dimensions": true },
+    { "id": "oracal_frosted_110gr", "name": "Туманный оракал 110 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 55000, "requires_dimensions": true },
+    { "id": "oracal_transparent_110gr", "name": "Прозрачный оракал 110 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 50000, "requires_dimensions": true },
+    { "id": "backlit_190gr", "name": "Бэк лит 190 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 85000, "requires_dimensions": true },
+    {
+      "id": "standee",
+      "name": "Штендеры",
+      "pricing_type": "fixed_options",
+      "unit": "pc",
+      "requires_dimensions": false,
+      "options": [
+        { "label": "+ Рейка 120x80 см", "price": 250000 },
+        { "label": "+ Рейка 150x100 см", "price": 300000 },
+        { "label": "+ Алюкабонд 120x80 см", "price": 1100000 }
+      ]
+    },
+    {
+      "id": "acrylic_lightbox",
+      "name": "Световой короб из акрила",
+      "pricing_type": "per_sqm_options",
+      "unit": "sqm",
+      "requires_dimensions": true,
+      "options": [
+        { "label": "Односторонний (1x)", "price_per_sqm": 1600000 },
+        { "label": "Двусторонний (2x)", "price_per_sqm": 2800000 }
+      ]
+    },
+    { "id": "neon_acrylic_8mm", "name": "Неон (акрил) проз 8 мм", "pricing_type": "per_sqm", "unit": "sqm", "price": 2800000, "requires_dimensions": true },
+    { "id": "plate_30x12", "name": "Табличка (30x12) см", "pricing_type": "fixed", "unit": "pc", "price": 105000, "requires_dimensions": false },
+    {
+      "id": "letters_acrylic_led",
+      "name": "Объёмные буквы Акрил ДИОД",
+      "pricing_type": "per_letter_by_height",
+      "unit": "letter",
+      "requires_dimensions": true,
+      "extraction_mode": "count_and_height",
+      "note": "Price is per single letter at the given height. Bot must count letters in the design and read/confirm intended letter height from the vision extraction step, then multiply count x price_at_height.",
+      "height_prices": [
+        { "height_cm": 60, "price": 8500 },
+        { "height_cm": 80, "price": 9500 },
+        { "height_cm": 100, "price": 13000 },
+        { "height_cm": 120, "price": 16000 }
+      ]
+    },
+    {
+      "id": "letters_fomex_5mm",
+      "name": "Объёмные буквы Фомекс 5 мм",
+      "pricing_type": "per_letter_by_height",
+      "unit": "letter",
+      "requires_dimensions": true,
+      "extraction_mode": "count_and_height",
+      "height_prices": [
+        { "height_cm": 60, "price": 5000 },
+        { "height_cm": 80, "price": 6000 },
+        { "height_cm": 100, "price": 8000 },
+        { "height_cm": 120, "price": 10000 }
+      ]
+    },
+    {
+      "id": "letters_acrylic_photon_led",
+      "name": "Объёмные буквы Акрил Фотон ДИОД",
+      "pricing_type": "per_letter_by_height",
+      "unit": "letter",
+      "requires_dimensions": true,
+      "extraction_mode": "count_and_height",
+      "height_prices": [
+        { "height_cm": 60, "price": 13500 },
+        { "height_cm": 80, "price": 15500 },
+        { "height_cm": 100, "price": 17500 },
+        { "height_cm": 120, "price": 19500 }
+      ]
+    },
+    {
+      "id": "letters_acrylic_brilliant_led",
+      "name": "Объёмные буквы Акрил Бриллиант ДИОД",
+      "pricing_type": "per_letter_by_height",
+      "unit": "letter",
+      "requires_dimensions": true,
+      "extraction_mode": "count_and_height",
+      "height_prices": [
+        { "height_cm": 60, "price": 11500 },
+        { "height_cm": 80, "price": 13500 },
+        { "height_cm": 100, "price": 15500 },
+        { "height_cm": 120, "price": 17500 }
+      ]
+    },
+    { "id": "oracal_color_110gr", "name": "Цветное оракал 110 гр", "pricing_type": "per_sqm", "unit": "sqm", "price": 75000, "requires_dimensions": true },
+    {
+      "id": "flag_parus",
+      "name": "Парус флагшток",
+      "pricing_type": "fixed_options",
+      "unit": "pc",
+      "requires_dimensions": false,
+      "options": [
+        { "label": "S (250x70 см, с конструкцией)", "price": 600000 },
+        { "label": "M (340x70 см, с конструкцией)", "price": 650000 },
+        { "label": "L (400x70 см, с конструкцией)", "price": 750000 }
+      ]
+    },
+    { "id": "car_vinyl_wrap_light", "name": "Енгил автомобилларга оракал ёпиштириш", "pricing_type": "fixed", "unit": "pc", "price": 850000, "requires_dimensions": false },
+    { "id": "design_service", "name": "Дизайн хизмати", "pricing_type": "per_hour", "unit": "hour", "price": 150000, "requires_dimensions": false },
+    {
+      "id": "banner_oracal_install",
+      "name": "Баннер, оракал установка",
+      "pricing_type": "per_sqm_options",
+      "unit": "sqm",
+      "requires_dimensions": true,
+      "options": [
+        { "label": "Монтаж (новая установка)", "price_per_sqm": 30000 },
+        { "label": "Демонтаж (снять старое + новая установка)", "price_per_sqm": 50000 }
+      ]
+    },
+    { "id": "plotter_contour_cut", "name": "Плоттер контурная резка", "pricing_type": "per_sqm", "unit": "sqm", "price": 50000, "requires_dimensions": true },
+    { "id": "laser_cutting", "name": "Лазерная резка", "pricing_type": "per_minute", "unit": "minute", "price": 3000, "requires_dimensions": false },
+    { "id": "rail_3x4", "name": "Рейка (3x4) см", "pricing_type": "per_meter", "unit": "meter", "price": 11000, "requires_dimensions": false },
+    { "id": "spider_stand_euro_160x60", "name": "Паук евро (160x60) см", "pricing_type": "fixed", "unit": "pc", "price": 120000, "requires_dimensions": false },
+    { "id": "rollup_euro_200x80", "name": "Ролл апп евро (200x80) см", "pricing_type": "fixed", "unit": "pc", "price": 380000, "requires_dimensions": false },
+    { "id": "alucobond_blank_122x244_5mm", "name": "Алюкабонд пустой (122x244) см 5.0 мм", "pricing_type": "fixed", "unit": "pc", "price": 450000, "requires_dimensions": false },
+    { "id": "alucobond_blank_150x300_5mm", "name": "Алюкабонд пустой (150x300) см 5.0 мм", "pricing_type": "fixed", "unit": "pc", "price": 850000, "requires_dimensions": false },
+    { "id": "iron_profile_3x3", "name": "Темир профиль 3x3 см (1.5 стенка)", "pricing_type": "fixed", "unit": "pc", "price": 30000, "requires_dimensions": false },
+    { "id": "uv_print_4color", "name": "УФ печать 4 хил ранг", "pricing_type": "per_sqm", "unit": "sqm", "price": 175000, "requires_dimensions": true },
+    { "id": "uv_print_4color_white", "name": "УФ печать 4 хил ранг + ОҚ", "pricing_type": "per_sqm", "unit": "sqm", "price": 220000, "requires_dimensions": true }
+  ],
+  "bundle_defaults": {
+    "description": "Default package suggested alongside the main product line, per the approved design.",
+    "always_include": ["design_service", "install_travel_fee"],
+    "staff_can_remove_any_line": true
+  },
+  "workshop_origin": {
+    "label": "Alcana workshop (Tashkent)",
+    "latitude": 41.291234,
+    "longitude": 69.196435,
+    "source": "https://yandex.uz/maps/10335/tashkent/?ll=69.196366%2C41.291415&mode=poi&poi%5Bpoint%5D=69.196435%2C41.291234&poi%5Buri%5D=ymapsbm1%3A%2F%2Forg%3Foid%3D37248530571&z=17.4"
+  }
+}
