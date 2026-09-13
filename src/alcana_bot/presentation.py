@@ -5,7 +5,23 @@ from alcana_bot.i18n import t
 
 _ADDON_CATEGORY_IDS = {"measurement_fee", "install_travel_fee"}
 
-def build_category_choices(price_list: PriceList, lang: str) -> list[tuple[str, str]]:
+_ITEM_BULLETS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
+
+
+def build_group_choices(price_list: PriceList, lang: str) -> list[tuple[str, str]]:
+    return [(group.id, group.display_name(lang)) for group in price_list.category_groups]
+
+
+def build_category_choices(price_list: PriceList, lang: str, group_id: str | None = None) -> list[tuple[str, str]]:
+    if group_id is not None:
+        group = next((g for g in price_list.category_groups if g.id == group_id), None)
+        if group is None:
+            return []
+        return [
+            (category_id, price_list.categories[category_id].display_name(lang))
+            for category_id in group.category_ids
+            if category_id in price_list.categories
+        ]
     return [
         (category.id, category.display_name(lang))
         for category_id, category in price_list.categories.items()
@@ -23,16 +39,20 @@ def _resolve_label(price_list: PriceList, label: str, lang: str) -> str:
     return category.display_name(lang) if category is not None else label
 
 def format_quote(items: list[LineItem], lang: str, price_list: PriceList) -> str:
-    lines = [
-        t(
-            "quote_line_item",
-            lang,
-            label=_resolve_label(price_list, item.label, lang),
-            detail=item.detail,
-            total=f"{item.total:,}".replace(",", " "),
+    lines = [t("quote_header", lang), ""]
+    for index, item in enumerate(items):
+        bullet = _ITEM_BULLETS[index] if index < len(_ITEM_BULLETS) else "🔸"
+        lines.append(
+            t(
+                "quote_line_item",
+                lang,
+                bullet=bullet,
+                label=_resolve_label(price_list, item.label, lang),
+                detail=item.detail,
+                total=f"{item.total:,}".replace(",", " "),
+            )
         )
-        for item in items
-    ]
     total = bundle_total(items)
+    lines.append("")
     lines.append(t("quote_total", lang, total=f"{total:,}".replace(",", " ")))
     return "\n".join(lines)

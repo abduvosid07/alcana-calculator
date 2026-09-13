@@ -5,15 +5,16 @@ import os
 import tempfile
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters,
 )
 
 from alcana_bot.config import Config
-from alcana_bot.price_data import PriceList
+from alcana_bot.price_data import PriceList, Category
 from alcana_bot.lang_store import LangStore
-from alcana_bot.presentation import build_category_choices, format_quote
+from alcana_bot.presentation import build_group_choices, build_category_choices, format_quote
 from alcana_bot.pricing import (
     price_fixed, price_fixed_options, price_per_sqm, price_per_sqm_options,
     price_per_letter_by_height, price_per_unit, resolve_distance_bracket, PricingError, LineItem,
@@ -22,18 +23,20 @@ from alcana_bot.bundle import assemble_bundle
 from alcana_bot.vision import extract_dimensions_from_image, extract_letter_spec_from_image, ExtractionError
 from alcana_bot.cdr import extract_cdr_dimensions, CdrExtractionError
 from alcana_bot.distance import geocode_address, estimate_driving_km, DistanceError
-from alcana_bot.i18n import t
+from alcana_bot.i18n import t, LANGUAGE_PROMPT, LANGUAGE_BUTTONS
 
 logger = logging.getLogger(__name__)
 
 (
+    AWAITING_LANGUAGE,
     AWAITING_FILE,
+    AWAITING_CATEGORY_GROUP,
     AWAITING_CATEGORY,
     AWAITING_OPTION,
     AWAITING_TEXT_INPUT,
     AWAITING_BUNDLE_CHOICE,
     AWAITING_BRACKET_CHOICE,
-) = range(6)
+) = range(8)
 
 DEFAULT_LANG = "uz"
 
@@ -45,9 +48,47 @@ def _lang(context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore, user_id: in
     return lang_store.get_language(user_id)
 
 
+def _back_keyboard(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton(t("back_button", lang), callback_data="back")]])
+
+
+async def _show(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None):
+    """Render a step in place, editing the previous bot message when possible.
+
+    Without this, every button tap or typed answer left the old prompt sitting
+    in the chat and piled a new bubble on top of it -- a few steps in, staff
+    could no longer tell which message was still "live".
+    """
+    target_msg = update.callback_query.message if update.callback_query else context.user_data.get("_active_msg")
+    if target_msg is not None:
+        try:
+            msg = await target_msg.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            context.user_data["_active_msg"] = msg
+            return msg
+        except Exception:
+            logger.debug("Could not edit previous message, sending a new one instead", exc_info=True)
+    msg = await update.effective_chat.send_message(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    context.user_data["_active_msg"] = msg
+    return msg
+
+
+async def _show_language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [[InlineKeyboardButton(label, callback_data=f"lang:{code}") for code, label in LANGUAGE_BUTTONS]]
+    await _show(update, context, LANGUAGE_PROMPT, reply_markup=InlineKeyboardMarkup(keyboard))
+    return AWAITING_LANGUAGE
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore) -> int:
-    lang = _lang(context, lang_store, update.effective_user.id)
-    await update.message.reply_text(t("welcome", lang))
+    context.user_data.clear()
+    return await _show_language_menu(update, context)
+
+
+async def handle_language_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = query.data.split(":", 1)[1]
+    lang_store.set_language(update.effective_user.id, lang)
+    await _show(update, context, t("welcome", lang))
     return AWAITING_FILE
 
 
@@ -56,11 +97,33 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_
     await update.message.reply_text(t("language_set", lang))
 
 
-async def _show_category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str) -> int:
-    choices = build_category_choices(price_list, lang)
+async def _show_category_group_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str) -> int:
+    choices = build_group_choices(price_list, lang)
+    keyboard = [[InlineKeyboardButton(name, callback_data=f"grp:{group_id}")] for group_id, name in choices]
+    keyboard.append([InlineKeyboardButton(t("back_button", lang), callback_data="back")])
+    await _show(update, context, t("choose_category_group", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+    return AWAITING_CATEGORY_GROUP
+
+
+async def _show_category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str, group_id: str) -> int:
+    context.user_data["category_group_id"] = group_id
+    choices = build_category_choices(price_list, lang, group_id=group_id)
     keyboard = [[InlineKeyboardButton(name, callback_data=f"cat:{category_id}")] for category_id, name in choices]
-    await update.effective_chat.send_message(t("choose_category", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard.append([InlineKeyboardButton(t("back_button", lang), callback_data="back")])
+    await _show(update, context, t("choose_category", lang), reply_markup=InlineKeyboardMarkup(keyboard))
     return AWAITING_CATEGORY
+
+
+async def _show_option_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str, category: Category) -> int:
+    keyboard = [[InlineKeyboardButton(opt.get("label", str(i)), callback_data=f"opt:{i}")] for i, opt in enumerate(category.options)]
+    keyboard.append([InlineKeyboardButton(t("back_button", lang), callback_data="back")])
+    await _show(update, context, t("choose_option", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+    return AWAITING_OPTION
+
+
+async def _show_bundle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> int:
+    await _show(update, context, t("ask_bundle_confirmation", lang), reply_markup=_bundle_keyboard(context, lang))
+    return AWAITING_BUNDLE_CHOICE
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client) -> int:
@@ -80,7 +143,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
         logger.info("Photo dimension extraction failed, will fall back to manual entry: %s", e)
         context.user_data["extracted_dimensions"] = None
 
-    return await _show_category_menu(update, context, price_list, lang)
+    return await _show_category_group_menu(update, context, price_list, lang)
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, soffice_path: str) -> int:
@@ -102,13 +165,29 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, pr
             except CdrExtractionError as e:
                 logger.info("CDR dimension extraction failed, will fall back to manual entry: %s", e)
 
-    return await _show_category_menu(update, context, price_list, lang)
+    return await _show_category_group_menu(update, context, price_list, lang)
+
+
+async def handle_category_group_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    group_id = query.data.split(":", 1)[1]
+    return await _show_category_menu(update, context, price_list, lang, group_id)
+
+
+async def handle_category_group_back(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    context.user_data.clear()
+    await _show(update, context, t("welcome", lang))
+    return AWAITING_FILE
 
 
 async def _ask_piece_count(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> int:
     context.user_data["pending_text_purpose"] = "piece_count"
-    target = update.callback_query.message if update.callback_query else update.message
-    await target.reply_text(t("enter_piece_count", lang))
+    await _show(update, context, t("enter_piece_count", lang), reply_markup=_back_keyboard(lang))
     return AWAITING_TEXT_INPUT
 
 
@@ -121,10 +200,7 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
     category = price_list.categories[category_id]
 
     if category.pricing_type in ("fixed_options", "per_sqm_options"):
-        keyboard = [[InlineKeyboardButton(opt.get("label", str(i)), callback_data=f"opt:{i}")] for i, opt in enumerate(category.options)]
-        await query.edit_message_text(t("choose_option", lang))
-        await query.message.reply_text(t("choose_option", lang), reply_markup=InlineKeyboardMarkup(keyboard))
-        return AWAITING_OPTION
+        return await _show_option_menu(update, context, lang, category)
 
     if category.pricing_type == "per_letter_by_height":
         image_bytes = context.user_data.get("image_bytes")
@@ -138,7 +214,7 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
             except (ExtractionError, PricingError) as e:
                 logger.info("Letter extraction/pricing failed, falling back to manual entry: %s", e)
         context.user_data["pending_text_purpose"] = "letters"
-        await query.message.reply_text(t("enter_letter_spec", lang))
+        await _show(update, context, t("enter_letter_spec", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     if category.pricing_type == "per_sqm":
@@ -148,12 +224,12 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
             item = price_per_sqm(category, width_cm, height_cm)
             return await _finish_main_item(update, context, price_list, lang_store, item)
         context.user_data["pending_text_purpose"] = "dimensions"
-        await query.message.reply_text(t("enter_dimensions", lang))
+        await _show(update, context, t("enter_dimensions", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     if category.pricing_type in ("per_hour", "per_minute", "per_meter"):
         context.user_data["pending_text_purpose"] = "quantity"
-        await query.message.reply_text(t("enter_quantity", lang))
+        await _show(update, context, t("enter_quantity", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     if category.pricing_type == "fixed":
@@ -165,8 +241,15 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
     # kept as a second line of defense so a bad price list can never be
     # silently mispriced as `fixed`.
     logger.error("Category '%s' has unsupported pricing_type '%s'", category.id, category.pricing_type)
-    await query.message.reply_text(t("category_misconfigured", lang))
+    await _show(update, context, t("category_misconfigured", lang))
     return AWAITING_FILE
+
+
+async def handle_category_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    return await _show_category_group_menu(update, context, price_list, lang)
 
 
 async def handle_option_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
@@ -188,8 +271,16 @@ async def handle_option_selected(update: Update, context: ContextTypes.DEFAULT_T
         return await _finish_main_item(update, context, price_list, lang_store, item)
 
     context.user_data["pending_text_purpose"] = "dimensions"
-    await query.message.reply_text(t("enter_dimensions", lang))
+    await _show(update, context, t("enter_dimensions", lang), reply_markup=_back_keyboard(lang))
     return AWAITING_TEXT_INPUT
+
+
+async def handle_option_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    group_id = context.user_data.get("category_group_id")
+    return await _show_category_menu(update, context, price_list, lang, group_id)
 
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, config: Config) -> int:
@@ -225,6 +316,14 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             item = price_per_unit(category, quantity=float(text))
             return await _finish_main_item(update, context, price_list, lang_store, item)
 
+        if purpose == "design_hours":
+            hours = float(text.replace(",", "."))
+            if hours <= 0:
+                raise ValueError("hours must be positive")
+            design_category = price_list.categories[DESIGN_CATEGORY_ID]
+            context.user_data["design_item"] = price_per_unit(design_category, quantity=hours)
+            return await _proceed_after_design(update, context, price_list, lang_store, lang)
+
         if purpose == "address":
             try:
                 # Synchronous HTTP call -- keep it off the event loop.
@@ -248,11 +347,32 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             "piece_count": "enter_piece_count",
             "letters": "enter_letter_spec",
             "quantity": "enter_quantity",
+            "design_hours": "enter_design_hours",
             "address": "ask_address_or_location",
             "manual_travel_fee": "enter_travel_fee_manually",
         }.get(purpose, "extraction_failed_fallback")
-        await update.message.reply_text(t(prompt_key, lang))
+        await _show(update, context, t(prompt_key, lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
+
+
+async def handle_text_input_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    purpose = context.user_data.get("pending_text_purpose")
+
+    if purpose in ("design_hours", "address"):
+        return await _show_bundle_menu(update, context, lang)
+    if purpose == "manual_travel_fee":
+        return await _offer_bracket_picker(update, context, price_list, lang)
+
+    category_id = context.user_data.get("category_id")
+    category = price_list.categories.get(category_id) if category_id else None
+    if category is not None and category.pricing_type in ("fixed_options", "per_sqm_options") and "option_index" in context.user_data:
+        return await _show_option_menu(update, context, lang, category)
+
+    group_id = context.user_data.get("category_group_id")
+    return await _show_category_menu(update, context, price_list, lang, group_id)
 
 
 async def handle_location_shared(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
@@ -267,6 +387,7 @@ def _bundle_keyboard(context: ContextTypes.DEFAULT_TYPE, lang: str) -> InlineKey
         [InlineKeyboardButton(t(design_key, lang), callback_data="bundle:toggle_design")],
         [InlineKeyboardButton(t(travel_key, lang), callback_data="bundle:toggle_travel")],
         [InlineKeyboardButton(t("bundle_confirm", lang), callback_data="bundle:confirm")],
+        [InlineKeyboardButton(t("back_button", lang), callback_data="back")],
     ])
 
 
@@ -278,9 +399,7 @@ async def _finish_main_item(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     always_include = price_list.bundle_defaults.get("always_include", [])
     context.user_data["include_design"] = DESIGN_CATEGORY_ID in always_include
     context.user_data["include_travel"] = TRAVEL_CATEGORY_ID in always_include
-    target = update.callback_query.message if update.callback_query else update.message
-    await target.reply_text(t("ask_bundle_confirmation", lang), reply_markup=_bundle_keyboard(context, lang))
-    return AWAITING_BUNDLE_CHOICE
+    return await _show_bundle_menu(update, context, lang)
 
 
 async def handle_bundle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
@@ -292,22 +411,37 @@ async def handle_bundle_choice(update: Update, context: ContextTypes.DEFAULT_TYP
     if action in ("toggle_design", "toggle_travel"):
         key = "include_design" if action == "toggle_design" else "include_travel"
         context.user_data[key] = not context.user_data.get(key, False)
-        await query.edit_message_reply_markup(reply_markup=_bundle_keyboard(context, lang))
-        return AWAITING_BUNDLE_CHOICE
+        return await _show_bundle_menu(update, context, lang)
 
     # action == "confirm"
     if context.user_data.get("include_design"):
-        design_category = price_list.categories[DESIGN_CATEGORY_ID]
-        context.user_data["design_item"] = price_per_unit(design_category, quantity=1)
-    else:
-        context.user_data["design_item"] = None
+        context.user_data["pending_text_purpose"] = "design_hours"
+        await _show(update, context, t("enter_design_hours", lang), reply_markup=_back_keyboard(lang))
+        return AWAITING_TEXT_INPUT
 
+    context.user_data["design_item"] = None
+    return await _proceed_after_design(update, context, price_list, lang_store, lang)
+
+
+async def _proceed_after_design(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, lang: str) -> int:
     if not context.user_data.get("include_travel"):
         return await _send_final_quote(update, context, price_list, lang_store, travel_item=None)
 
     context.user_data["pending_text_purpose"] = "address"
-    await query.message.reply_text(t("ask_address_or_location", lang))
+    await _show(update, context, t("ask_address_or_location", lang), reply_markup=_back_keyboard(lang))
     return AWAITING_TEXT_INPUT
+
+
+async def handle_bundle_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    category_id = context.user_data.get("category_id")
+    category = price_list.categories.get(category_id) if category_id else None
+    if category is not None and category.pricing_type in ("fixed_options", "per_sqm_options"):
+        return await _show_option_menu(update, context, lang, category)
+    group_id = context.user_data.get("category_group_id")
+    return await _show_category_menu(update, context, price_list, lang, group_id)
 
 
 async def _offer_bracket_picker(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str) -> int:
@@ -317,7 +451,7 @@ async def _offer_bracket_picker(update: Update, context: ContextTypes.DEFAULT_TY
     if not brackets:
         # No brackets to choose from -- fall back to typing the amount.
         context.user_data["pending_text_purpose"] = "manual_travel_fee"
-        await update.effective_chat.send_message(t("enter_travel_fee_manually", lang))
+        await _show(update, context, t("enter_travel_fee_manually", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     keyboard = [
@@ -329,8 +463,9 @@ async def _offer_bracket_picker(update: Update, context: ContextTypes.DEFAULT_TY
         )]
         for index, bracket in enumerate(brackets)
     ]
+    keyboard.append([InlineKeyboardButton(t("back_button", lang), callback_data="back")])
     context.user_data["pending_text_purpose"] = None
-    await update.effective_chat.send_message(t("choose_travel_bracket", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+    await _show(update, context, t("choose_travel_bracket", lang), reply_markup=InlineKeyboardMarkup(keyboard))
     return AWAITING_BRACKET_CHOICE
 
 
@@ -345,7 +480,7 @@ async def handle_bracket_selected(update: Update, context: ContextTypes.DEFAULT_
     if index >= len(brackets):
         logger.error("Travel bracket index %s out of range (%s brackets)", index, len(brackets))
         context.user_data["pending_text_purpose"] = "manual_travel_fee"
-        await query.message.reply_text(t("enter_travel_fee_manually", lang))
+        await _show(update, context, t("enter_travel_fee_manually", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     bracket = brackets[index]
@@ -357,6 +492,13 @@ async def handle_bracket_selected(update: Update, context: ContextTypes.DEFAULT_
         total=bracket["price"],
     )
     return await _send_final_quote(update, context, price_list, lang_store, travel_item)
+
+
+async def handle_bracket_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    return await _show_bundle_menu(update, context, lang)
 
 
 async def handle_bracket_text_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
@@ -372,7 +514,7 @@ async def handle_bracket_text_fallback(update: Update, context: ContextTypes.DEF
 async def _send_final_quote(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, travel_item) -> int:
     lang = _lang(context, lang_store, update.effective_user.id)
     items = assemble_bundle(context.user_data["main_item"], context.user_data.get("design_item"), travel_item)
-    await update.effective_chat.send_message(format_quote(items, lang, price_list))
+    await _show(update, context, format_quote(items, lang, price_list))
     return AWAITING_FILE
 
 
@@ -390,7 +532,7 @@ async def _finish_distance_step(update: Update, context: ContextTypes.DEFAULT_TY
         # Never silently drop the travel fee (Global Constraint).
         logger.info("Distance bracket resolution failed, falling back to manual entry: %s", e)
         context.user_data["pending_text_purpose"] = "manual_travel_fee"
-        await update.effective_chat.send_message(t("enter_travel_fee_manually", lang))
+        await _show(update, context, t("enter_travel_fee_manually", lang), reply_markup=_back_keyboard(lang))
         return AWAITING_TEXT_INPUT
 
     return await _send_final_quote(update, context, price_list, lang_store, travel_item)
@@ -424,25 +566,37 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
             MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
         ],
         states={
+            AWAITING_LANGUAGE: [
+                CallbackQueryHandler(lambda u, c: handle_language_selected(u, c, lang_store), pattern=r"^lang:"),
+            ],
             AWAITING_FILE: [
                 MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
                 MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
             ],
+            AWAITING_CATEGORY_GROUP: [
+                CallbackQueryHandler(lambda u, c: handle_category_group_selected(u, c, price_list, lang_store), pattern=r"^grp:"),
+                CallbackQueryHandler(lambda u, c: handle_category_group_back(u, c, lang_store), pattern=r"^back$"),
+            ],
             AWAITING_CATEGORY: [
                 CallbackQueryHandler(lambda u, c: handle_category_selected(u, c, price_list, lang_store, vision_client), pattern=r"^cat:"),
+                CallbackQueryHandler(lambda u, c: handle_category_back(u, c, price_list, lang_store), pattern=r"^back$"),
             ],
             AWAITING_OPTION: [
                 CallbackQueryHandler(lambda u, c: handle_option_selected(u, c, price_list, lang_store), pattern=r"^opt:"),
+                CallbackQueryHandler(lambda u, c: handle_option_back(u, c, price_list, lang_store), pattern=r"^back$"),
             ],
             AWAITING_TEXT_INPUT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, lambda u, c: handle_text_input(u, c, price_list, lang_store, config)),
                 MessageHandler(filters.LOCATION, lambda u, c: handle_location_shared(u, c, price_list, lang_store)),
+                CallbackQueryHandler(lambda u, c: handle_text_input_back(u, c, price_list, lang_store), pattern=r"^back$"),
             ],
             AWAITING_BUNDLE_CHOICE: [
                 CallbackQueryHandler(lambda u, c: handle_bundle_choice(u, c, price_list, lang_store), pattern=r"^bundle:"),
+                CallbackQueryHandler(lambda u, c: handle_bundle_back(u, c, price_list, lang_store), pattern=r"^back$"),
             ],
             AWAITING_BRACKET_CHOICE: [
                 CallbackQueryHandler(lambda u, c: handle_bracket_selected(u, c, price_list, lang_store), pattern=r"^bracket:"),
+                CallbackQueryHandler(lambda u, c: handle_bracket_back(u, c, price_list, lang_store), pattern=r"^back$"),
                 # Escape hatches: a shared location still resolves the fee
                 # automatically, and typed text re-shows the picker.
                 MessageHandler(filters.LOCATION, lambda u, c: handle_location_shared(u, c, price_list, lang_store)),

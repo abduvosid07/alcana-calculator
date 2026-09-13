@@ -1,8 +1,23 @@
 from alcana_bot.price_data import load_price_list
 from alcana_bot.pricing import LineItem
-from alcana_bot.presentation import build_category_choices, format_quote
+from alcana_bot.presentation import build_category_choices, build_group_choices, format_quote
 
 PRICE_LIST = load_price_list("data/price_list.json")
+
+def test_build_group_choices_returns_every_group_with_a_display_name():
+    groups = build_group_choices(PRICE_LIST, "ru")
+    ids = [g[0] for g in groups]
+    assert "volumetric_letters" in ids
+    assert all(name for _, name in groups)
+
+def test_build_category_choices_scoped_to_a_group_only_returns_that_groups_items():
+    choices = build_category_choices(PRICE_LIST, "ru", group_id="volumetric_letters")
+    ids = [c[0] for c in choices]
+    assert "letters_acrylic_led" in ids
+    assert "banner_300gr" not in ids
+
+def test_build_category_choices_unknown_group_returns_empty():
+    assert build_category_choices(PRICE_LIST, "ru", group_id="does_not_exist") == []
 
 def test_build_category_choices_excludes_fee_addons():
     choices = build_category_choices(PRICE_LIST, "ru")

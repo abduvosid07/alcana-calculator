@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 class PriceDataError(Exception):
     pass
@@ -15,6 +15,18 @@ KNOWN_PRICING_TYPES = {
     "per_meter",
     "distance_bracket",
 }
+
+_ADDON_CATEGORY_IDS = {"measurement_fee", "install_travel_fee"}
+
+
+def _pick_name(name_uz: str | None, name_ru: str | None, name: str | None, id_: str, lang: str) -> str:
+    """Shared display-name fallback: language-specific -> generic -> other language -> id."""
+    preferred = name_uz if lang == "uz" else name_ru
+    other = name_ru if lang == "uz" else name_uz
+    for candidate in (preferred, name, other):
+        if candidate:
+            return candidate
+    return id_.replace("_", " ").title()
 
 
 @dataclass(frozen=True)
@@ -41,18 +53,26 @@ class Category:
         ``name``, a couple carry ``name_ru``/``name_uz``), so every step has
         to be optional.
         """
-        preferred = self.name_uz if lang == "uz" else self.name_ru
-        other = self.name_ru if lang == "uz" else self.name_uz
-        for candidate in (preferred, self.name, other):
-            if candidate:
-                return candidate
-        return self.id.replace("_", " ").title()
+        return _pick_name(self.name_uz, self.name_ru, self.name, self.id, lang)
+
+
+@dataclass(frozen=True)
+class CategoryGroup:
+    id: str
+    name_ru: str
+    name_uz: str
+    category_ids: list
+
+    def display_name(self, lang: str = "ru") -> str:
+        return _pick_name(self.name_uz, self.name_ru, None, self.id, lang)
+
 
 @dataclass(frozen=True)
 class PriceList:
     categories: dict
     bundle_defaults: dict
     workshop_origin: dict
+    category_groups: list = field(default_factory=list)
 
 def _validate_entry(category_id: str, pricing_type: str, entry: dict) -> None:
     """Fail loudly at load time on a pricing_type the bot cannot price.
@@ -80,6 +100,27 @@ def _validate_entry(category_id: str, pricing_type: str, entry: dict) -> None:
             raise PriceDataError(f"Category '{category_id}' (pricing_type '{pricing_type}') is missing required non-empty field: brackets")
 
 
+def _validate_groups(groups: list, categories: dict) -> None:
+    """Fail loudly if the menu grouping is out of sync with the category list.
+
+    Without this a category left out of every group would be silently
+    unreachable through the two-level menu, and a typo'd id inside a group
+    would silently drop that product from the menu instead of erroring.
+    """
+    seen = set()
+    for group in groups:
+        for category_id in group.category_ids:
+            if category_id not in categories:
+                raise PriceDataError(f"category_groups: group '{group.id}' references unknown category '{category_id}'")
+            if category_id in seen:
+                raise PriceDataError(f"category_groups: category '{category_id}' appears in more than one group")
+            seen.add(category_id)
+
+    missing = set(categories) - _ADDON_CATEGORY_IDS - seen
+    if missing:
+        raise PriceDataError(f"category_groups: categories not assigned to any group: {', '.join(sorted(missing))}")
+
+
 def load_price_list(path: str) -> PriceList:
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
@@ -104,8 +145,21 @@ def load_price_list(path: str) -> PriceList:
             name_uz=entry.get("name_uz"),
         )
 
+    category_groups = [
+        CategoryGroup(
+            id=group["id"],
+            name_ru=group["name_ru"],
+            name_uz=group["name_uz"],
+            category_ids=list(group["categories"]),
+        )
+        for group in raw.get("category_groups", [])
+    ]
+    if category_groups:
+        _validate_groups(category_groups, categories)
+
     return PriceList(
         categories=categories,
         bundle_defaults=raw["bundle_defaults"],
         workshop_origin=raw["workshop_origin"],
+        category_groups=category_groups,
     )

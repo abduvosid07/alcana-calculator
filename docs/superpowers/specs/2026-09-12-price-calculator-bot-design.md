@@ -20,6 +20,39 @@ fallback behavior, the "never silently guess" requirement) is unchanged:
   Geocoding API has no such "must be public" restriction and a genuine
   free-usage tier suited to low-volume internal tools.
 
+**Post-launch UX redesign (2026-09-13, after live staff feedback):**
+After deploying v1 to the Schneider server, the user (using the bot with real
+staff) reported it felt "plain, vague, robotic" and asked for several UX
+changes. Implemented:
+- **Language picker on every `/start`**, via inline buttons (🇺🇿/🇷🇺), instead
+  of requiring staff to remember the `/til`/`/ru` commands. Those commands
+  still work as a manual override at any time.
+- **A back button (`⬅️ Orqaga`/`Назад`) in every button-driven step** —
+  category group, category, option, bundle, and bracket-picker screens, plus
+  text-input prompts. Each state has its own explicit back handler that
+  returns to the specific previous screen (not a generic history stack),
+  since the conversation graph is small enough that this stays simple.
+- **Category menu is now two levels.** `price_list.json` gained a
+  `category_groups` array (id + bilingual name + list of category ids); the
+  bot shows groups first, then categories within the chosen group. Every
+  non-addon category must belong to exactly one group or `load_price_list`
+  raises at startup — a category can no longer go silently missing from the
+  menu.
+- **Messages are edited in place instead of piling up.** A shared `_show()`
+  helper edits the previous bot message (via the callback's message, or a
+  tracked "active message" for steps reached by typed text) instead of
+  sending a new bubble per step. This is what "the bot's message must
+  disappear" meant in practice — one evolving message per order, not N.
+- **Design-service hours are asked, not assumed.** The design line used to be
+  silently priced as a flat 1 hour whenever it was included in the bundle.
+  Confirming the bundle with design included now asks "how many hours did
+  design take?" and prices `hours x 150 000 so'm` instead.
+- **Quotes are reformatted** with a bold header, numbered line items, and a
+  bold total (HTML parse mode) instead of a flat text block.
+- **Pricing-calculation correctness** ("bot is calculating wrongly") was
+  flagged by the user as a separate, not-yet-scoped follow-up — no pricing
+  logic changed in this pass beyond the design-hours fix above.
+
 ## Purpose
 
 Alcana's designers/sales staff currently calculate advertising order prices

@@ -172,6 +172,60 @@
     { "id": "uv_print_4color", "name": "УФ печать 4 хил ранг", "pricing_type": "per_sqm", "unit": "sqm", "price": 175000, "requires_dimensions": true },
     { "id": "uv_print_4color_white", "name": "УФ печать 4 хил ранг + ОҚ", "pricing_type": "per_sqm", "unit": "sqm", "price": 220000, "requires_dimensions": true }
   ],
+  "category_groups": [
+    {
+      "id": "lightbox_signage",
+      "name_ru": "💡 Лайтбоксы, штендеры, ролл-апы",
+      "name_uz": "💡 Laytboks, shtender, roll-ap",
+      "categories": [
+        "lightbox_rr_60b", "lightbox_tr_60a", "slimbox_80x60", "slimbox_120x80",
+        "shtender_slimbox_80x60", "shtender_slimbox_120x60", "shiftbox_120x45",
+        "fabric_lightbox", "acrylic_lightbox", "standee", "spider_stand_160x60",
+        "spider_stand_euro_160x60", "rollup_200x80", "rollup_euro_200x80"
+      ]
+    },
+    {
+      "id": "printing",
+      "name_ru": "🖨 Баннер и оракал (печать)",
+      "name_uz": "🖨 Banner va oracal (bosma)",
+      "categories": [
+        "banner_300gr", "oracal_vinyl_140gr", "oracal_mesh_140gr", "oracal_frosted_110gr",
+        "oracal_transparent_110gr", "oracal_color_110gr", "backlit_190gr",
+        "uv_print_4color", "uv_print_4color_white"
+      ]
+    },
+    {
+      "id": "volumetric_letters",
+      "name_ru": "🔤 Объёмные буквы",
+      "name_uz": "🔤 Hajmli harflar",
+      "categories": [
+        "letters_acrylic_led", "letters_fomex_5mm", "letters_acrylic_photon_led",
+        "letters_acrylic_brilliant_led"
+      ]
+    },
+    {
+      "id": "neon_plates",
+      "name_ru": "✨ Неон и таблички",
+      "name_uz": "✨ Neon va lavhalar",
+      "categories": ["neon_acrylic_8mm", "plate_30x12"]
+    },
+    {
+      "id": "flags_auto",
+      "name_ru": "🚩 Флагштоки и авто",
+      "name_uz": "🚩 Flagshtok va avto",
+      "categories": ["flag_parus", "car_vinyl_wrap_light"]
+    },
+    {
+      "id": "install_and_extra",
+      "name_ru": "🛠 Монтаж, резка и доп. услуги",
+      "name_uz": "🛠 Montaj, kesish va qo'shimcha xizmatlar",
+      "categories": [
+        "banner_oracal_install", "plotter_contour_cut", "laser_cutting", "rail_3x4",
+        "alucobond_blank_122x244_5mm", "alucobond_blank_150x300_5mm",
+        "iron_profile_3x3", "design_service"
+      ]
+    }
+  ],
   "bundle_defaults": {
     "description": "Default package suggested alongside the main product line, per the approved design.",
     "always_include": ["design_service", "install_travel_fee"],
