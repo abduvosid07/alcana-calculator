@@ -1,7 +1,7 @@
 from alcana_bot.pricing import LineItem
 
-def assemble_bundle(main_item: LineItem, design_item: LineItem | None = None, travel_item: LineItem | None = None) -> list[LineItem]:
-    items = [main_item]
+def assemble_bundle(main_items: list[LineItem], design_item: LineItem | None = None, travel_item: LineItem | None = None) -> list[LineItem]:
+    items = list(main_items)
     if design_item is not None:
         items.append(design_item)
     if travel_item is not None:
