@@ -264,11 +264,25 @@ def test_confirm_with_travel_off_keeps_design_and_skips_distance_step():
 
     assert state == AWAITING_FILE  # quote sent, no address asked
     assert context.user_data["design_item"] is not None
-    # The quote lands on the still-tracked bundle-confirm message (edited in
-    # place), not a new bubble from the text reply -- that's the point of `_show`.
-    quote = _all_text(update)
+    # The quote must be a NEW message following the typed hours reply, not an
+    # edit of the older bundle-confirm bubble -- editing that one would make
+    # the quote render above what staff just typed.
+    quote = _all_text(hours_update)
     assert "Дизайн хизмати" in quote  # design line kept
     assert "Выезд на установку" not in quote  # travel line dropped
+
+
+def test_reply_to_typed_text_is_always_a_new_message_not_an_edit_of_an_older_prompt():
+    """Regression: editing a prompt sent before the staff member's own typed
+    reply made the bot's answer render ABOVE what they just typed in Telegram
+    (edited messages don't move). A text-triggered reply must always be new."""
+    context = _bundle_context()
+    context.user_data["pending_text_purpose"] = "design_hours"
+    update = make_text_update("2")
+
+    asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    update.effective_chat.send_message.assert_awaited()
 
 
 def test_confirm_with_both_off_sends_main_item_only():

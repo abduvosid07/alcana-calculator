@@ -53,23 +53,21 @@ def _back_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 async def _show(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None):
-    """Render a step in place, editing the previous bot message when possible.
+    """Render a step, editing the tapped message in place for button-driven
+    transitions instead of piling a new bubble on top of it.
 
-    Without this, every button tap or typed answer left the old prompt sitting
-    in the chat and piled a new bubble on top of it -- a few steps in, staff
-    could no longer tell which message was still "live".
+    A reply that follows something staff just TYPED must always be a new
+    message, never an edit of an older bot message -- Telegram does not move
+    an edited message's position in the chat, so editing a prompt sent before
+    the staff member's own text would make the bot's answer render above what
+    they just typed (looks like the bot answered before they asked).
     """
-    target_msg = update.callback_query.message if update.callback_query else context.user_data.get("_active_msg")
-    if target_msg is not None:
+    if update.callback_query is not None:
         try:
-            msg = await target_msg.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-            context.user_data["_active_msg"] = msg
-            return msg
+            return await update.callback_query.message.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception:
-            logger.debug("Could not edit previous message, sending a new one instead", exc_info=True)
-    msg = await update.effective_chat.send_message(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-    context.user_data["_active_msg"] = msg
-    return msg
+            logger.debug("Could not edit the tapped message, sending a new one instead", exc_info=True)
+    return await update.effective_chat.send_message(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 async def _show_language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
