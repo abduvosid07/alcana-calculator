@@ -16,7 +16,7 @@ from alcana_bot.bot import (
     AWAITING_CATEGORY_GROUP, AWAITING_FILE, AWAITING_TEXT_INPUT,
     build_application, handle_bracket_selected, handle_bracket_text_fallback,
     handle_bundle_choice, handle_category_group_selected, handle_category_selected,
-    handle_text_input,
+    handle_text_input, handle_cart_add, handle_cart_remove, handle_cart_done, handle_category_group_back,
 )
 from alcana_bot.config import Config
 from alcana_bot.price_data import Category, load_price_list
@@ -210,6 +210,74 @@ def test_finishing_a_product_clears_its_per_product_fields():
 
     for key in ("extracted_dimensions", "cdr_dimensions", "image_bytes", "media_type", "category_id", "option_index"):
         assert key not in context.user_data
+
+
+def _cart_context(cart):
+    context = make_context()
+    context.user_data["cart"] = cart
+    return context
+
+
+def test_cart_add_button_goes_to_category_group_menu():
+    context = _cart_context([MagicMock(total=100000)])
+    update = make_callback_update("cart:add")
+
+    state = asyncio.run(handle_cart_add(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_CATEGORY_GROUP
+
+
+def test_cart_remove_drops_that_index_and_restays_on_review():
+    item1, item2 = MagicMock(total=100000), MagicMock(total=200000)
+    context = _cart_context([item1, item2])
+    update = make_callback_update("cart:remove:0")
+
+    state = asyncio.run(handle_cart_remove(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_CART_DECISION
+    assert context.user_data["cart"] == [item2]
+
+
+def test_cart_remove_last_item_falls_back_to_category_group_menu():
+    context = _cart_context([MagicMock(total=100000)])
+    update = make_callback_update("cart:remove:0")
+
+    state = asyncio.run(handle_cart_remove(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_CATEGORY_GROUP
+    assert context.user_data["cart"] == []
+
+
+def test_cart_done_sets_bundle_defaults_and_shows_bundle_menu():
+    context = _cart_context([MagicMock(total=100000)])
+    update = make_callback_update("cart:done")
+
+    state = asyncio.run(handle_cart_done(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_BUNDLE_CHOICE
+    always = PRICE_LIST.bundle_defaults.get("always_include", [])
+    assert context.user_data["include_design"] == ("design_service" in always)
+    assert context.user_data["include_travel"] == ("install_travel_fee" in always)
+
+
+def test_category_group_back_with_empty_cart_resets_to_welcome():
+    context = make_context()  # no cart at all -- first product in progress
+    update = make_callback_update("back")
+
+    state = asyncio.run(handle_category_group_back(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_FILE
+    assert context.user_data == {}
+
+
+def test_category_group_back_with_existing_cart_returns_to_cart_review():
+    context = _cart_context([MagicMock(total=100000)])
+    update = make_callback_update("back")
+
+    state = asyncio.run(handle_category_group_back(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_CART_DECISION
+    assert len(context.user_data["cart"]) == 1  # not lost
 
 
 # --- Fix 5: independent per-line bundle toggles -----------------------------

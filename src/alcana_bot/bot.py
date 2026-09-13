@@ -196,13 +196,45 @@ async def handle_category_group_selected(update: Update, context: ContextTypes.D
     return await _show_category_menu(update, context, price_list, lang, group_id)
 
 
-async def handle_category_group_back(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore) -> int:
+async def handle_category_group_back(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
     query = update.callback_query
     await query.answer()
     lang = _lang(context, lang_store, update.effective_user.id)
+    if context.user_data.get("cart"):
+        return await _show_cart_review(update, context, price_list, lang)
     context.user_data.clear()
     await _show(update, context, t("welcome", lang))
     return AWAITING_FILE
+
+
+async def handle_cart_add(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    return await _show_category_group_menu(update, context, price_list, lang)
+
+
+async def handle_cart_remove(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    index = int(query.data.split(":", 2)[2])
+    cart = context.user_data.get("cart", [])
+    if 0 <= index < len(cart):
+        cart.pop(index)
+    if not cart:
+        return await _show_category_group_menu(update, context, price_list, lang)
+    return await _show_cart_review(update, context, price_list, lang)
+
+
+async def handle_cart_done(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    always_include = price_list.bundle_defaults.get("always_include", [])
+    context.user_data["include_design"] = DESIGN_CATEGORY_ID in always_include
+    context.user_data["include_travel"] = TRAVEL_CATEGORY_ID in always_include
+    return await _show_bundle_menu(update, context, lang)
 
 
 async def _ask_piece_count(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> int:
@@ -595,7 +627,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
             ],
             AWAITING_CATEGORY_GROUP: [
                 CallbackQueryHandler(lambda u, c: handle_category_group_selected(u, c, price_list, lang_store), pattern=r"^grp:"),
-                CallbackQueryHandler(lambda u, c: handle_category_group_back(u, c, lang_store), pattern=r"^back$"),
+                CallbackQueryHandler(lambda u, c: handle_category_group_back(u, c, price_list, lang_store), pattern=r"^back$"),
             ],
             AWAITING_CATEGORY: [
                 CallbackQueryHandler(lambda u, c: handle_category_selected(u, c, price_list, lang_store, vision_client), pattern=r"^cat:"),
@@ -609,6 +641,14 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
                 MessageHandler(filters.TEXT & ~filters.COMMAND, lambda u, c: handle_text_input(u, c, price_list, lang_store, config)),
                 MessageHandler(filters.LOCATION, lambda u, c: handle_location_shared(u, c, price_list, lang_store)),
                 CallbackQueryHandler(lambda u, c: handle_text_input_back(u, c, price_list, lang_store), pattern=r"^back$"),
+            ],
+            AWAITING_CART_DECISION: [
+                CallbackQueryHandler(lambda u, c: handle_cart_add(u, c, price_list, lang_store), pattern=r"^cart:add$"),
+                CallbackQueryHandler(lambda u, c: handle_cart_remove(u, c, price_list, lang_store), pattern=r"^cart:remove:\d+$"),
+                CallbackQueryHandler(lambda u, c: handle_cart_done(u, c, price_list, lang_store), pattern=r"^cart:done$"),
+                CallbackQueryHandler(lambda u, c: handle_category_group_back(u, c, price_list, lang_store), pattern=r"^back$"),
+                MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
+                MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
             ],
             AWAITING_BUNDLE_CHOICE: [
                 CallbackQueryHandler(lambda u, c: handle_bundle_choice(u, c, price_list, lang_store), pattern=r"^bundle:"),
