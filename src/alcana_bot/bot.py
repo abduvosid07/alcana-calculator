@@ -418,7 +418,11 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
             logger.exception("Failed to send error notice to chat %s", chat.id)
 
     conversation = ConversationHandler(
-        entry_points=[CommandHandler("start", lambda u, c: start(u, c, lang_store))],
+        entry_points=[
+            CommandHandler("start", lambda u, c: start(u, c, lang_store)),
+            MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
+            MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
+        ],
         states={
             AWAITING_FILE: [
                 MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
