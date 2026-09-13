@@ -147,7 +147,12 @@ async def _show_cart_review(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client) -> int:
+    cart = context.user_data.get("cart", [])
+    last_quote_items = context.user_data.get("last_quote_items")
     context.user_data.clear()
+    context.user_data["cart"] = cart
+    if last_quote_items is not None:
+        context.user_data["last_quote_items"] = last_quote_items
     lang = _lang(context, lang_store, update.effective_user.id)
     photo_file = await update.message.photo[-1].get_file()
     image_bytes = bytes(await photo_file.download_as_bytearray())
@@ -167,7 +172,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, soffice_path: str) -> int:
+    cart = context.user_data.get("cart", [])
+    last_quote_items = context.user_data.get("last_quote_items")
     context.user_data.clear()
+    context.user_data["cart"] = cart
+    if last_quote_items is not None:
+        context.user_data["last_quote_items"] = last_quote_items
     lang = _lang(context, lang_store, update.effective_user.id)
     document = update.message.document
     context.user_data["extracted_dimensions"] = None
@@ -565,8 +575,11 @@ async def handle_bracket_text_fallback(update: Update, context: ContextTypes.DEF
 
 async def _send_final_quote(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, travel_item) -> int:
     lang = _lang(context, lang_store, update.effective_user.id)
-    items = assemble_bundle(context.user_data["main_item"], context.user_data.get("design_item"), travel_item)
-    await _show(update, context, format_quote(items, lang, price_list))
+    items = assemble_bundle(context.user_data["cart"], context.user_data.get("design_item"), travel_item)
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t("pdf_button", lang), callback_data="pdf")]])
+    await _show(update, context, format_quote(items, lang, price_list), reply_markup=keyboard)
+    context.user_data.clear()
+    context.user_data["last_quote_items"] = items
     return AWAITING_FILE
 
 

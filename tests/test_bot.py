@@ -280,11 +280,77 @@ def test_category_group_back_with_existing_cart_returns_to_cart_review():
     assert len(context.user_data["cart"]) == 1  # not lost
 
 
+def test_final_quote_includes_every_cart_item():
+    context = make_context()
+    context.user_data["cart"] = [
+        MagicMock(label="banner_300gr", total=90000),
+        MagicMock(label="design_service", total=300000),
+    ]
+    context.user_data["design_item"] = None
+    update = make_callback_update("bracket:1")
+
+    state = asyncio.run(handle_bracket_selected(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_FILE
+    quote = _all_text(update)
+    assert "90 000" in quote
+    assert "300 000" in quote
+    assert "150 000" in quote  # the travel bracket line itself
+
+
+def test_final_quote_attaches_a_pdf_button():
+    context = make_context()
+    context.user_data["cart"] = [MagicMock(label="banner_300gr", total=90000)]
+    context.user_data["design_item"] = None
+    update = make_callback_update("bracket:1")
+
+    asyncio.run(handle_bracket_selected(update, context, PRICE_LIST, FakeLangStore()))
+
+    markup = update.callback_query.message.edit_text.call_args.kwargs["reply_markup"]
+    callback_datas = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+    assert "pdf" in callback_datas
+
+
+def test_final_quote_resets_cart_but_keeps_last_quote_items_for_the_pdf_button():
+    context = make_context()
+    context.user_data["cart"] = [MagicMock(label="banner_300gr", total=90000)]
+    context.user_data["design_item"] = None
+    update = make_callback_update("bracket:1")
+
+    asyncio.run(handle_bracket_selected(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert "cart" not in context.user_data  # wiped so the next photo starts empty
+    assert len(context.user_data["last_quote_items"]) == 2  # main item + travel
+
+
+def test_new_photo_after_a_finished_order_starts_a_fresh_empty_cart(mocker):
+    mocker.patch("alcana_bot.bot.extract_dimensions_from_image", side_effect=bot_module.ExtractionError("no client"))
+    context = make_context()
+    previous_quote_items = [MagicMock(total=1)]
+    context.user_data["last_quote_items"] = previous_quote_items
+    update = SimpleNamespace(
+        message=SimpleNamespace(
+            photo=[SimpleNamespace(get_file=AsyncMock(return_value=SimpleNamespace(
+                download_as_bytearray=AsyncMock(return_value=bytearray(b"fake")),
+            )))],
+        ),
+        callback_query=None,
+        effective_user=SimpleNamespace(id=42),
+        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message())),
+    )
+
+    from alcana_bot.bot import handle_photo
+    asyncio.run(handle_photo(update, context, PRICE_LIST, FakeLangStore(), None))
+
+    assert context.user_data["cart"] == []
+    assert context.user_data["last_quote_items"] is previous_quote_items  # still there for the PDF button
+
+
 # --- Fix 5: independent per-line bundle toggles -----------------------------
 
 def _bundle_context(price_list=PRICE_LIST):
     context = make_context()
-    context.user_data["main_item"] = MagicMock(total=100000)
+    context.user_data["cart"] = [MagicMock(total=100000)]
     always = price_list.bundle_defaults.get("always_include", [])
     context.user_data["include_design"] = "design_service" in always
     context.user_data["include_travel"] = "install_travel_fee" in always
@@ -380,7 +446,7 @@ def test_confirm_with_travel_off_keeps_design_and_skips_distance_step():
     state = asyncio.run(handle_text_input(hours_update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
 
     assert state == AWAITING_FILE  # quote sent, no address asked
-    assert context.user_data["design_item"] is not None
+    assert len(context.user_data["last_quote_items"]) == 2  # cart item + design, no travel
     # The quote must be a NEW message following the typed hours reply, not an
     # edit of the older bundle-confirm bubble -- editing that one would make
     # the quote render above what staff just typed.
@@ -402,7 +468,7 @@ def test_reply_to_typed_text_is_always_a_new_message_not_an_edit_of_an_older_pro
     update.effective_chat.send_message.assert_awaited()
 
 
-def test_confirm_with_both_off_sends_main_item_only():
+def test_confirm_with_both_off_sends_cart_only():
     context = _bundle_context()
     context.user_data["include_design"] = False
     context.user_data["include_travel"] = False
@@ -410,7 +476,7 @@ def test_confirm_with_both_off_sends_main_item_only():
 
     state = asyncio.run(handle_bundle_choice(update, context, PRICE_LIST, FakeLangStore()))
     assert state == AWAITING_FILE
-    assert context.user_data["design_item"] is None
+    assert len(context.user_data["last_quote_items"]) == 1  # cart item only, no design/travel
 
 
 # --- Fix 6: bracket picker on failed geocode --------------------------------
@@ -419,7 +485,7 @@ def test_failed_geocode_offers_a_bracket_keyboard_not_free_text(mocker):
     mocker.patch("alcana_bot.bot.geocode_address", side_effect=bot_module.DistanceError("bad address"))
     update = make_text_update("не существующий адрес")
     context = make_context()
-    context.user_data.update({"category_id": "banner_300gr", "pending_text_purpose": "address", "main_item": MagicMock(total=1)})
+    context.user_data.update({"category_id": "banner_300gr", "pending_text_purpose": "address", "cart": [MagicMock(total=1)]})
 
     state = asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
 
@@ -434,7 +500,7 @@ def test_failed_geocode_offers_a_bracket_keyboard_not_free_text(mocker):
 def test_selected_bracket_becomes_the_travel_line_of_the_quote():
     update = make_callback_update("bracket:1")
     context = make_context()
-    context.user_data["main_item"] = MagicMock(total=100000)
+    context.user_data["cart"] = [MagicMock(total=100000)]
     context.user_data["design_item"] = None
 
     state = asyncio.run(handle_bracket_selected(update, context, PRICE_LIST, FakeLangStore()))
@@ -448,7 +514,7 @@ def test_selected_bracket_becomes_the_travel_line_of_the_quote():
 def test_typing_while_bracket_picker_is_shown_reshows_it_instead_of_dead_ending():
     update = make_text_update("не знаю")
     context = make_context()
-    context.user_data["main_item"] = MagicMock(total=1)
+    context.user_data["cart"] = [MagicMock(total=1)]
 
     state = asyncio.run(handle_bracket_text_fallback(update, context, PRICE_LIST, FakeLangStore()))
 

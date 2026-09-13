@@ -110,6 +110,10 @@ TRANSLATIONS = {
         "uz": "💰 <b>Jami: {total} so'm</b>",
         "ru": "💰 <b>Итого: {total} сум</b>",
     },
+    "pdf_button": {
+        "uz": "📄 PDF",
+        "ru": "📄 PDF",
+    },
     "cart_item_added": {
         "uz": "✅ Qo'shildi: {label} — {total} so'm",
         "ru": "✅ Добавлено: {label} — {total} сум",
