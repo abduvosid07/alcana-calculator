@@ -57,7 +57,7 @@ def make_callback_update(data):
         callback_query=query,
         message=None,
         effective_user=SimpleNamespace(id=42),
-        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message())),
+        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message()), send_document=AsyncMock()),
     )
 
 
@@ -66,7 +66,7 @@ def make_text_update(text):
         callback_query=None,
         message=SimpleNamespace(text=text, reply_text=AsyncMock()),
         effective_user=SimpleNamespace(id=42),
-        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message())),
+        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message()), send_document=AsyncMock()),
     )
 
 
@@ -550,3 +550,46 @@ def test_unsupported_pricing_type_reports_misconfiguration(caplog):
 def test_build_application_registers_an_error_handler():
     application = build_application(FAKE_CONFIG, PRICE_LIST, FakeLangStore(), None, "soffice")
     assert application.error_handlers, "no application-level error handler registered"
+
+
+# --- PDF export button -------------------------------------------------------
+
+def test_pdf_button_sends_a_document_when_last_quote_items_present(mocker):
+    mocker.patch("alcana_bot.bot.render_quote_pdf", return_value=b"%PDF-fake-bytes")
+    context = make_context()
+    context.user_data["last_quote_items"] = [MagicMock(total=1)]
+    update = make_callback_update("pdf")
+
+    from alcana_bot.bot import handle_pdf_export
+    state = asyncio.run(handle_pdf_export(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_FILE
+    update.effective_chat.send_document.assert_awaited()
+    _, kwargs = update.effective_chat.send_document.call_args
+    assert kwargs["filename"].endswith(".pdf")
+
+
+def test_pdf_button_with_no_last_quote_shows_expired_message():
+    context = make_context()  # no last_quote_items at all
+    update = make_callback_update("pdf")
+
+    from alcana_bot.bot import handle_pdf_export
+    state = asyncio.run(handle_pdf_export(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_FILE
+    update.callback_query.message.reply_text.assert_awaited()
+    text = update.callback_query.message.reply_text.call_args.args[0]
+    assert "eskirgan" in text or "устарело" in text
+
+
+def test_pdf_button_render_failure_shows_friendly_error(mocker):
+    mocker.patch("alcana_bot.bot.render_quote_pdf", side_effect=bot_module.PdfExportError("font missing"))
+    context = make_context()
+    context.user_data["last_quote_items"] = [MagicMock(total=1)]
+    update = make_callback_update("pdf")
+
+    from alcana_bot.bot import handle_pdf_export
+    state = asyncio.run(handle_pdf_export(update, context, PRICE_LIST, FakeLangStore()))
+
+    assert state == AWAITING_FILE
+    update.callback_query.message.reply_text.assert_awaited()

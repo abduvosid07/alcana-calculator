@@ -3,6 +3,8 @@ import asyncio
 import logging
 import os
 import tempfile
+from datetime import datetime
+from io import BytesIO
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -23,6 +25,7 @@ from alcana_bot.bundle import assemble_bundle
 from alcana_bot.vision import extract_dimensions_from_image, extract_letter_spec_from_image, ExtractionError
 from alcana_bot.cdr import extract_cdr_dimensions, CdrExtractionError
 from alcana_bot.distance import geocode_address, estimate_driving_km, DistanceError
+from alcana_bot.pdf_export import render_quote_pdf, PdfExportError
 from alcana_bot.i18n import t, LANGUAGE_PROMPT, LANGUAGE_BUTTONS
 
 logger = logging.getLogger(__name__)
@@ -573,6 +576,29 @@ async def handle_bracket_text_fallback(update: Update, context: ContextTypes.DEF
     return await _offer_bracket_picker(update, context, price_list, lang)
 
 
+async def handle_pdf_export(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = _lang(context, lang_store, update.effective_user.id)
+    items = context.user_data.get("last_quote_items")
+    if not items:
+        await query.message.reply_text(t("pdf_expired", lang))
+        return AWAITING_FILE
+
+    try:
+        # reportlab's rendering is synchronous CPU work -- off the event loop
+        # so it doesn't stall the bot for every other staff member.
+        pdf_bytes = await asyncio.to_thread(render_quote_pdf, items, lang, price_list)
+    except PdfExportError as e:
+        logger.error("PDF rendering failed: %s", e)
+        await query.message.reply_text(t("pdf_generation_failed", lang))
+        return AWAITING_FILE
+
+    filename = f"Alcana_{datetime.now().strftime('%Y-%m-%d')}.pdf"
+    await update.effective_chat.send_document(document=BytesIO(pdf_bytes), filename=filename)
+    return AWAITING_FILE
+
+
 async def _send_final_quote(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, travel_item) -> int:
     lang = _lang(context, lang_store, update.effective_user.id)
     items = assemble_bundle(context.user_data["cart"], context.user_data.get("design_item"), travel_item)
@@ -637,6 +663,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
             AWAITING_FILE: [
                 MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
                 MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
+                CallbackQueryHandler(lambda u, c: handle_pdf_export(u, c, price_list, lang_store), pattern=r"^pdf$"),
             ],
             AWAITING_CATEGORY_GROUP: [
                 CallbackQueryHandler(lambda u, c: handle_category_group_selected(u, c, price_list, lang_store), pattern=r"^grp:"),

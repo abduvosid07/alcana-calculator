@@ -114,6 +114,14 @@ TRANSLATIONS = {
         "uz": "📄 PDF",
         "ru": "📄 PDF",
     },
+    "pdf_expired": {
+        "uz": "Bu taklif eskirgan, iltimos qaytadan hisoblang.",
+        "ru": "Это предложение устарело, пожалуйста, посчитайте заново.",
+    },
+    "pdf_generation_failed": {
+        "uz": "PDF yaratib bo'lmadi, iltimos qaytadan urinib ko'ring.",
+        "ru": "Не удалось создать PDF, пожалуйста, попробуйте ещё раз.",
+    },
     "cart_item_added": {
         "uz": "✅ Qo'shildi: {label} — {total} so'm",
         "ru": "✅ Добавлено: {label} — {total} сум",
