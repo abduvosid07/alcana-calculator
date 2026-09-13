@@ -1,6 +1,6 @@
 from alcana_bot.price_data import load_price_list
 from alcana_bot.pricing import LineItem
-from alcana_bot.presentation import build_category_choices, build_group_choices, format_quote
+from alcana_bot.presentation import build_category_choices, build_group_choices, format_quote, format_cart_review
 
 PRICE_LIST = load_price_list("data/price_list.json")
 
@@ -65,3 +65,15 @@ def test_format_quote_shows_real_product_names_not_ids():
 def test_format_quote_falls_back_to_raw_label_for_unknown_category():
     items = [LineItem(label="not_a_category", detail="", unit_price=1, quantity=1, total=1)]
     assert "not_a_category" in format_quote(items, "ru", PRICE_LIST)
+
+def test_format_cart_review_lists_every_item_and_shows_the_latest_addition():
+    items = [
+        LineItem(label="banner_300gr", detail="200x150 см", unit_price=30000, quantity=3.0, total=90000),
+        LineItem(label="design_service", detail="2 hour", unit_price=150000, quantity=2, total=300000),
+    ]
+    text = format_cart_review(items, "ru", PRICE_LIST)
+    assert "Баннер 300 гр" in text
+    assert "Дизайн хизмати" in text
+    assert "90 000" in text
+    assert "300 000" in text
+    assert "Добавлено" in text  # the "just added" header uses the LAST item

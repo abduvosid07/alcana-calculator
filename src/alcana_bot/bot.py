@@ -14,7 +14,7 @@ from telegram.ext import (
 from alcana_bot.config import Config
 from alcana_bot.price_data import PriceList, Category
 from alcana_bot.lang_store import LangStore
-from alcana_bot.presentation import build_group_choices, build_category_choices, format_quote
+from alcana_bot.presentation import build_group_choices, build_category_choices, format_quote, format_cart_review
 from alcana_bot.pricing import (
     price_fixed, price_fixed_options, price_per_sqm, price_per_sqm_options,
     price_per_letter_by_height, price_per_unit, resolve_distance_bracket, PricingError, LineItem,
@@ -34,9 +34,10 @@ logger = logging.getLogger(__name__)
     AWAITING_CATEGORY,
     AWAITING_OPTION,
     AWAITING_TEXT_INPUT,
+    AWAITING_CART_DECISION,
     AWAITING_BUNDLE_CHOICE,
     AWAITING_BRACKET_CHOICE,
-) = range(8)
+) = range(9)
 
 DEFAULT_LANG = "uz"
 
@@ -122,6 +123,27 @@ async def _show_option_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 async def _show_bundle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> int:
     await _show(update, context, t("ask_bundle_confirmation", lang), reply_markup=_bundle_keyboard(context, lang))
     return AWAITING_BUNDLE_CHOICE
+
+
+def _cart_keyboard(context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str) -> InlineKeyboardMarkup:
+    cart = context.user_data.get("cart", [])
+    rows = []
+    if len(cart) >= 2:
+        for index, item in enumerate(cart):
+            category = price_list.categories.get(item.label)
+            label = category.display_name(lang) if category is not None else item.label
+            rows.append([InlineKeyboardButton(t("cart_remove_button", lang, label=label), callback_data=f"cart:remove:{index}")])
+    rows.append([InlineKeyboardButton(t("cart_add_button", lang), callback_data="cart:add")])
+    rows.append([InlineKeyboardButton(t("cart_done_button", lang), callback_data="cart:done")])
+    rows.append([InlineKeyboardButton(t("back_button", lang), callback_data="back")])
+    return InlineKeyboardMarkup(rows)
+
+
+async def _show_cart_review(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang: str) -> int:
+    cart = context.user_data["cart"]
+    text = format_cart_review(cart, lang, price_list)
+    await _show(update, context, text, reply_markup=_cart_keyboard(context, price_list, lang))
+    return AWAITING_CART_DECISION
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client) -> int:
@@ -391,13 +413,13 @@ def _bundle_keyboard(context: ContextTypes.DEFAULT_TYPE, lang: str) -> InlineKey
 
 async def _finish_main_item(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, item) -> int:
     lang = _lang(context, lang_store, update.effective_user.id)
-    context.user_data["main_item"] = item
-    # Which add-on lines start switched on comes from the price data, not from
-    # hardcoded booleans (bundle_defaults.always_include).
-    always_include = price_list.bundle_defaults.get("always_include", [])
-    context.user_data["include_design"] = DESIGN_CATEGORY_ID in always_include
-    context.user_data["include_travel"] = TRAVEL_CATEGORY_ID in always_include
-    return await _show_bundle_menu(update, context, lang)
+    context.user_data.setdefault("cart", []).append(item)
+    # Clear fields specific to the product just finished -- without this,
+    # adding a second product via "add another" (no new photo) would silently
+    # reuse the FIRST product's extracted dimensions instead of asking fresh.
+    for key in ("extracted_dimensions", "cdr_dimensions", "image_bytes", "media_type", "category_id", "option_index"):
+        context.user_data.pop(key, None)
+    return await _show_cart_review(update, context, price_list, lang)
 
 
 async def handle_bundle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:

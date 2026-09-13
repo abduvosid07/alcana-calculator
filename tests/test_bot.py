@@ -12,7 +12,7 @@ import pytest
 
 from alcana_bot import bot as bot_module
 from alcana_bot.bot import (
-    AWAITING_BRACKET_CHOICE, AWAITING_BUNDLE_CHOICE, AWAITING_CATEGORY,
+    AWAITING_BRACKET_CHOICE, AWAITING_BUNDLE_CHOICE, AWAITING_CART_DECISION, AWAITING_CATEGORY,
     AWAITING_CATEGORY_GROUP, AWAITING_FILE, AWAITING_TEXT_INPUT,
     build_application, handle_bracket_selected, handle_bracket_text_fallback,
     handle_bundle_choice, handle_category_group_selected, handle_category_selected,
@@ -126,8 +126,8 @@ def test_piece_count_input_scales_the_fixed_line_total():
 
     state = asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
 
-    assert state == AWAITING_BUNDLE_CHOICE
-    item = context.user_data["main_item"]
+    assert state == AWAITING_CART_DECISION
+    item = context.user_data["cart"][0]
     assert item.quantity == 10
     assert item.total == 6500000
 
@@ -138,7 +138,7 @@ def test_piece_count_input_defaults_to_one_on_dash():
     context.user_data.update({"category_id": "rollup_200x80", "pending_text_purpose": "piece_count"})
 
     asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
-    assert context.user_data["main_item"].total == 650000
+    assert context.user_data["cart"][0].total == 650000
 
 
 def test_piece_count_input_rejects_garbage_and_reprompts():
@@ -158,9 +158,58 @@ def test_piece_count_for_fixed_options_uses_the_chosen_option():
     context.user_data.update({"category_id": "standee", "option_index": 2, "pending_text_purpose": "piece_count"})
 
     asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
-    item = context.user_data["main_item"]
+    item = context.user_data["cart"][0]
     assert item.unit_price == 1100000
     assert item.total == 3300000
+
+
+# --- Multi-product cart -------------------------------------------------------
+
+def test_finishing_a_product_appends_to_cart_and_shows_review_screen():
+    update = make_text_update("10")
+    context = make_context()
+    context.user_data.update({"category_id": "rollup_200x80", "pending_text_purpose": "piece_count"})
+
+    state = asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    assert state == AWAITING_CART_DECISION
+    assert len(context.user_data["cart"]) == 1
+    assert context.user_data["cart"][0].total == 6500000
+    assert "main_item" not in context.user_data  # replaced by the cart list
+
+
+def test_finishing_a_second_product_appends_without_losing_the_first():
+    context = make_context()
+    context.user_data["cart"] = [MagicMock(total=100000)]
+    context.user_data.update({"category_id": "rollup_200x80", "pending_text_purpose": "piece_count"})
+    update = make_text_update("2")
+
+    asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    assert len(context.user_data["cart"]) == 2
+    assert context.user_data["cart"][1].total == 1300000
+
+
+def test_finishing_a_product_clears_its_per_product_fields():
+    """Regression guard: without this, adding a second per_sqm product via
+    'add another' (no new photo) would silently reuse the FIRST product's
+    extracted dimensions instead of asking fresh."""
+    update = make_text_update("10")
+    context = make_context()
+    context.user_data.update({
+        "category_id": "rollup_200x80",
+        "pending_text_purpose": "piece_count",
+        "extracted_dimensions": {"width_cm": 200, "height_cm": 150},
+        "cdr_dimensions": (200, 150),
+        "image_bytes": b"fake",
+        "media_type": "image/jpeg",
+        "option_index": 0,
+    })
+
+    asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    for key in ("extracted_dimensions", "cdr_dimensions", "image_bytes", "media_type", "category_id", "option_index"):
+        assert key not in context.user_data
 
 
 # --- Fix 5: independent per-line bundle toggles -----------------------------

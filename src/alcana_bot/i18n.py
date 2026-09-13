@@ -110,6 +110,22 @@ TRANSLATIONS = {
         "uz": "💰 <b>Jami: {total} so'm</b>",
         "ru": "💰 <b>Итого: {total} сум</b>",
     },
+    "cart_item_added": {
+        "uz": "✅ Qo'shildi: {label} — {total} so'm",
+        "ru": "✅ Добавлено: {label} — {total} сум",
+    },
+    "cart_add_button": {
+        "uz": "➕ Yana mahsulot qo'shish",
+        "ru": "➕ Добавить ещё товар",
+    },
+    "cart_done_button": {
+        "uz": "✅ Tugatish",
+        "ru": "✅ Завершить",
+    },
+    "cart_remove_button": {
+        "uz": "🗑 {label} ni olib tashlash",
+        "ru": "🗑 Убрать: {label}",
+    },
     "extraction_failed_fallback": {
         "uz": "⚠️ Avtomatik aniqlash muvaffaqiyatsiz tugadi, iltimos qo'lda kiriting.",
         "ru": "⚠️ Автоматическое распознавание не удалось, пожалуйста, введите вручную.",

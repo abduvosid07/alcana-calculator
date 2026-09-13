@@ -56,3 +56,28 @@ def format_quote(items: list[LineItem], lang: str, price_list: PriceList) -> str
     lines.append("")
     lines.append(t("quote_total", lang, total=f"{total:,}".replace(",", " ")))
     return "\n".join(lines)
+
+def format_cart_review(items: list[LineItem], lang: str, price_list: PriceList) -> str:
+    latest = items[-1]
+    lines = [
+        t(
+            "cart_item_added",
+            lang,
+            label=_resolve_label(price_list, latest.label, lang),
+            total=f"{latest.total:,}".replace(",", " "),
+        ),
+        "",
+    ]
+    for index, item in enumerate(items):
+        bullet = _ITEM_BULLETS[index] if index < len(_ITEM_BULLETS) else "🔸"
+        lines.append(
+            t(
+                "quote_line_item",
+                lang,
+                bullet=bullet,
+                label=_resolve_label(price_list, item.label, lang),
+                detail=item.detail,
+                total=f"{item.total:,}".replace(",", " "),
+            )
+        )
+    return "\n".join(lines)
