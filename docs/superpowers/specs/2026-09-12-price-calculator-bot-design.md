@@ -119,6 +119,14 @@ line total:
 
 ### Confirmed pricing assumptions (from user)
 
+- **Correction, 2026-10-01:** the assumption below (flat per-letter price)
+  was wrong and overcharged/undercharged depending on where a letter's
+  actual height fell within its bracket. Confirmed with the business: each
+  `height_prices` bracket is a rate **per centimeter** of the letter's
+  actual height, not a flat per-letter price — e.g. a letter up to 60cm
+  costs `height_cm x 8,500` so'm, not a flat 8,500 regardless of exact
+  height. The bracket still only decides which rate applies. Fixed in
+  `pricing.py`'s `price_per_letter_by_height`.
 - Volumetric letters (items 24–27 in the PDF) are priced **per individual
   letter** at a given height bracket (60/80/100/120 cm) — not per cm of
   height, not a flat sign price. The bot **must count the letters in the

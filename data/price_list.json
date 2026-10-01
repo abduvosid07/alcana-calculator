@@ -85,7 +85,7 @@
       "unit": "letter",
       "requires_dimensions": true,
       "extraction_mode": "count_and_height",
-      "note": "Price is per single letter at the given height. Bot must count letters in the design and read/confirm intended letter height from the vision extraction step, then multiply count x price_at_height.",
+      "note": "height_prices entries are a rate in so'm PER CENTIMETER of letter height, not a flat per-letter price. Bot must count letters in the design, read/confirm intended letter height from the vision extraction step, then compute count x height_cm x rate_at_bracket (the bracket picks the rate; the actual height is what gets multiplied).",
       "height_prices": [
         { "height_cm": 60, "price": 8500 },
         { "height_cm": 80, "price": 9500 },
