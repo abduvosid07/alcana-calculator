@@ -47,6 +47,15 @@ DEFAULT_LANG = "uz"
 DESIGN_CATEGORY_ID = "design_service"
 TRAVEL_CATEGORY_ID = "install_travel_fee"
 
+_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
+_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _is_image_document(document) -> bool:
+    if document.mime_type in _IMAGE_MIME_TYPES:
+        return True
+    return document.file_name.lower().endswith(_IMAGE_EXTENSIONS)
+
 
 def _lang(context: ContextTypes.DEFAULT_TYPE, lang_store: LangStore, user_id: int) -> str:
     return lang_store.get_language(user_id)
@@ -174,7 +183,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE, price
     return await _show_category_group_menu(update, context, price_list, lang)
 
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, soffice_path: str) -> int:
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, vision_client, soffice_path: str) -> int:
     cart = context.user_data.get("cart", [])
     last_quote_items = context.user_data.get("last_quote_items")
     context.user_data.clear()
@@ -197,6 +206,22 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, pr
                 context.user_data["cdr_dimensions"] = (width_cm, height_cm)
             except CdrExtractionError as e:
                 logger.info("CDR dimension extraction failed, will fall back to manual entry: %s", e)
+    elif _is_image_document(document):
+        # Designers often send a design as a FILE rather than a compressed
+        # Telegram "photo" specifically to avoid quality loss on fine
+        # dimension text -- without this branch it silently got NO vision
+        # treatment at all (not even a failed attempt), straight to manual
+        # entry, regardless of how clear the image was.
+        doc_file = await document.get_file()
+        image_bytes = bytes(await doc_file.download_as_bytearray())
+        media_type = document.mime_type or "image/jpeg"
+        context.user_data["image_bytes"] = image_bytes
+        context.user_data["media_type"] = media_type
+        try:
+            result = await asyncio.to_thread(extract_dimensions_from_image, vision_client, image_bytes, media_type)
+            context.user_data["extracted_dimensions"] = {"width_cm": result["width_cm"], "height_cm": result["height_cm"]}
+        except ExtractionError as e:
+            logger.info("Document image dimension extraction failed, will fall back to manual entry: %s", e)
 
     return await _show_category_group_menu(update, context, price_list, lang)
 
@@ -674,7 +699,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
         entry_points=[
             CommandHandler("start", lambda u, c: start(u, c, lang_store)),
             MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
-            MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
+            MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, vision_client, soffice_path)),
         ],
         states={
             AWAITING_LANGUAGE: [
@@ -682,7 +707,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
             ],
             AWAITING_FILE: [
                 MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
-                MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
+                MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, vision_client, soffice_path)),
                 CallbackQueryHandler(lambda u, c: handle_pdf_export(u, c, price_list, lang_store), pattern=r"^pdf$"),
             ],
             AWAITING_CATEGORY_GROUP: [
@@ -708,7 +733,7 @@ def build_application(config: Config, price_list: PriceList, lang_store: LangSto
                 CallbackQueryHandler(lambda u, c: handle_cart_done(u, c, price_list, lang_store), pattern=r"^cart:done$"),
                 CallbackQueryHandler(lambda u, c: handle_category_group_back(u, c, price_list, lang_store), pattern=r"^back$"),
                 MessageHandler(filters.PHOTO, lambda u, c: handle_photo(u, c, price_list, lang_store, vision_client)),
-                MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, soffice_path)),
+                MessageHandler(filters.Document.ALL, lambda u, c: handle_document(u, c, price_list, lang_store, vision_client, soffice_path)),
             ],
             AWAITING_BUNDLE_CHOICE: [
                 CallbackQueryHandler(lambda u, c: handle_bundle_choice(u, c, price_list, lang_store), pattern=r"^bundle:"),

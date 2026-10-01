@@ -393,6 +393,82 @@ def test_new_photo_after_a_finished_order_starts_a_fresh_empty_cart(mocker):
     assert context.user_data["last_quote_items"] is previous_quote_items  # still there for the PDF button
 
 
+def _make_document_update(file_name, mime_type, download_bytes=b"fake-image-bytes"):
+    document = SimpleNamespace(
+        file_name=file_name,
+        mime_type=mime_type,
+        get_file=AsyncMock(return_value=SimpleNamespace(
+            download_as_bytearray=AsyncMock(return_value=bytearray(download_bytes)),
+            download_to_drive=AsyncMock(),
+        )),
+    )
+    return SimpleNamespace(
+        message=SimpleNamespace(document=document),
+        callback_query=None,
+        effective_user=SimpleNamespace(id=42),
+        effective_chat=SimpleNamespace(id=1, send_message=AsyncMock(return_value=make_fake_message())),
+    )
+
+
+def test_image_sent_as_a_document_gets_the_same_vision_treatment_as_a_photo(mocker):
+    """Regression: designers often send a design as a FILE (not a compressed
+    Telegram 'photo') to preserve quality for fine dimension text -- that must
+    still run vision extraction, not silently skip straight to manual entry."""
+    mocker.patch(
+        "alcana_bot.bot.extract_dimensions_from_image",
+        return_value={"width_cm": 680, "height_cm": 80, "confidence": 0.95},
+    )
+    update = _make_document_update("cardio_center.png", "image/png")
+    context = make_context()
+
+    from alcana_bot.bot import handle_document
+    asyncio.run(handle_document(update, context, PRICE_LIST, FakeLangStore(), object(), "soffice"))
+
+    assert context.user_data["image_bytes"] == b"fake-image-bytes"
+    assert context.user_data["media_type"] == "image/png"
+    assert context.user_data["extracted_dimensions"] == {"width_cm": 680, "height_cm": 80}
+
+
+def test_image_document_with_failed_extraction_falls_back_gracefully(mocker):
+    mocker.patch("alcana_bot.bot.extract_dimensions_from_image", side_effect=bot_module.ExtractionError("unclear"))
+    update = _make_document_update("design.jpg", "image/jpeg")
+    context = make_context()
+
+    from alcana_bot.bot import handle_document
+    asyncio.run(handle_document(update, context, PRICE_LIST, FakeLangStore(), object(), "soffice"))
+
+    assert context.user_data["extracted_dimensions"] is None
+    assert context.user_data["image_bytes"] == b"fake-image-bytes"  # still kept for the letters vision step
+
+
+def test_cdr_document_is_unaffected_by_the_image_document_handling(mocker):
+    """Regression guard: .cdr files must still go through CDR extraction only,
+    never attempt image vision on them."""
+    extract_dims_mock = mocker.patch("alcana_bot.bot.extract_dimensions_from_image")
+    mocker.patch("alcana_bot.bot.extract_cdr_dimensions", return_value=(100, 50))
+    update = _make_document_update("design.cdr", None)
+    context = make_context()
+
+    from alcana_bot.bot import handle_document
+    asyncio.run(handle_document(update, context, PRICE_LIST, FakeLangStore(), object(), "soffice"))
+
+    assert context.user_data["cdr_dimensions"] == (100, 50)
+    assert "image_bytes" not in context.user_data
+    extract_dims_mock.assert_not_called()
+
+
+def test_non_image_non_cdr_document_is_a_graceful_no_op():
+    update = _make_document_update("quote.pdf", "application/pdf")
+    context = make_context()
+
+    from alcana_bot.bot import handle_document
+    state = asyncio.run(handle_document(update, context, PRICE_LIST, FakeLangStore(), object(), "soffice"))
+
+    assert state == AWAITING_CATEGORY_GROUP
+    assert "image_bytes" not in context.user_data
+    assert context.user_data["extracted_dimensions"] is None
+
+
 # --- Fix 5: independent per-line bundle toggles -----------------------------
 
 def _bundle_context(price_list=PRICE_LIST):
