@@ -17,13 +17,17 @@ _DIMENSIONS_PROMPT = (
 
 _LETTERS_PROMPT = (
     "This image shows a design for volumetric/3D letters (dimensional signage "
-    "letters). The design may contain letters at more than one height (e.g. "
-    "different words or lines of text at different sizes) -- identify each "
-    "distinct group of letters that share the same height. For each group, "
-    "count exactly how many individual letters/characters need to be "
-    "fabricated, and read or infer the height in centimeters (one of 60, 80, "
-    "100, or 120cm, or another explicit value). Reply with ONLY a JSON "
-    'object, no other text, in this exact shape: {"groups": [{"letter_count": '
+    "letters). The design may also include non-alphabetic symbols, icons, or "
+    "logos fabricated the same way as the letters (e.g. a heart, a star, or "
+    "another custom shape next to the text) -- count each such symbol as a "
+    "unit too, exactly like a letter. The design may contain items at more "
+    "than one height (e.g. different words/lines of text, or a symbol at a "
+    "different height than the text) -- identify each distinct group of "
+    "items (letters and/or symbols) that share the same height. For each "
+    "group, count exactly how many individual units need to be fabricated, "
+    "and read or infer the height in centimeters (one of 60, 80, 100, or "
+    "120cm, or another explicit value). Reply with ONLY a JSON object, no "
+    'other text, in this exact shape: {"groups": [{"letter_count": '
     '<integer>, "height_cm": <number>}, ...], "confidence": <0-1>}. Set '
     "confidence low (below 0.5) if any group is unclear."
 )
