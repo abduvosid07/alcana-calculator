@@ -39,8 +39,8 @@ TRANSLATIONS = {
         "ru": "🔢 Введите количество (например: часы, метры или минуты):",
     },
     "enter_letter_spec": {
-        "uz": "🔤 Harflar sonini va balandligini (sm) avtomatik aniqlab bo'lmadi. Iltimos, sonini va balandligini kiriting (masalan: 6, 80):",
-        "ru": "🔤 Не удалось определить количество и высоту букв автоматически. Введите количество и высоту в см (например: 6, 80):",
+        "uz": "🔤 Harflar sonini va balandligini (sm) avtomatik aniqlab bo'lmadi. Har xil balandlikdagi har bir guruh uchun alohida qatorga soni va balandligini kiriting (masalan:\n6, 80\n4, 60):",
+        "ru": "🔤 Не удалось определить количество и высоту букв автоматически. Введите количество и высоту для каждой группы с отдельной высотой на новой строке (например:\n6, 80\n4, 60):",
     },
     "enter_design_hours": {
         "uz": "🎨 Dizaynga necha soat sarfladingiz? Sonini kiriting (masalan: 2 yoki 1.5):",

@@ -274,8 +274,11 @@ async def handle_category_selected(update: Update, context: ContextTypes.DEFAULT
                 spec = await asyncio.to_thread(
                     extract_letter_spec_from_image, vision_client, image_bytes, context.user_data["media_type"]
                 )
-                item = price_per_letter_by_height(category, letter_count=spec["letter_count"], height_cm=spec["height_cm"])
-                return await _finish_main_item(update, context, price_list, lang_store, item)
+                items = [
+                    price_per_letter_by_height(category, letter_count=group["letter_count"], height_cm=group["height_cm"])
+                    for group in spec["groups"]
+                ]
+                return await _finish_main_items(update, context, price_list, lang_store, items)
             except (ExtractionError, PricingError) as e:
                 logger.info("Letter extraction/pricing failed, falling back to manual entry: %s", e)
         context.user_data["pending_text_purpose"] = "letters"
@@ -373,9 +376,16 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             return await _finish_main_item(update, context, price_list, lang_store, item)
 
         if purpose == "letters":
-            count_str, height_str = [p.strip() for p in text.split(",")]
-            item = price_per_letter_by_height(category, letter_count=int(count_str), height_cm=float(height_str))
-            return await _finish_main_item(update, context, price_list, lang_store, item)
+            items = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                count_str, height_str = [p.strip() for p in line.split(",")]
+                items.append(price_per_letter_by_height(category, letter_count=int(count_str), height_cm=float(height_str)))
+            if not items:
+                raise ValueError("no letter height groups provided")
+            return await _finish_main_items(update, context, price_list, lang_store, items)
 
         if purpose == "quantity":
             item = price_per_unit(category, quantity=float(text))
@@ -456,15 +466,25 @@ def _bundle_keyboard(context: ContextTypes.DEFAULT_TYPE, lang: str) -> InlineKey
     ])
 
 
-async def _finish_main_item(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, item) -> int:
+async def _finish_main_items(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, items: list) -> int:
+    """Append one or more priced lines to the cart at once.
+
+    Plural because a single photo/text entry can produce more than one line
+    -- e.g. volumetric letters at two different heights in the same design
+    become two cart lines from one extraction/entry.
+    """
     lang = _lang(context, lang_store, update.effective_user.id)
-    context.user_data.setdefault("cart", []).append(item)
+    context.user_data.setdefault("cart", []).extend(items)
     # Clear fields specific to the product just finished -- without this,
     # adding a second product via "add another" (no new photo) would silently
     # reuse the FIRST product's extracted dimensions instead of asking fresh.
     for key in ("extracted_dimensions", "cdr_dimensions", "image_bytes", "media_type", "category_id", "option_index"):
         context.user_data.pop(key, None)
     return await _show_cart_review(update, context, price_list, lang)
+
+
+async def _finish_main_item(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore, item) -> int:
+    return await _finish_main_items(update, context, price_list, lang_store, [item])
 
 
 async def handle_bundle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, price_list: PriceList, lang_store: LangStore) -> int:

@@ -212,6 +212,53 @@ def test_finishing_a_product_clears_its_per_product_fields():
         assert key not in context.user_data
 
 
+def test_letters_category_with_vision_success_adds_one_cart_item_per_height_group(mocker):
+    """A design with letters at two different heights must become two
+    separate cart lines, each priced with its own rate -- not collapsed into
+    a single height for the whole design."""
+    mocker.patch(
+        "alcana_bot.bot.extract_letter_spec_from_image",
+        return_value={"groups": [{"letter_count": 6, "height_cm": 80}, {"letter_count": 4, "height_cm": 60}], "confidence": 0.9},
+    )
+    update = make_callback_update("cat:letters_acrylic_led")
+    context = make_context()
+    context.user_data.update({"image_bytes": b"fake", "media_type": "image/jpeg"})
+
+    state = asyncio.run(handle_category_selected(update, context, PRICE_LIST, FakeLangStore(), object()))
+
+    assert state == AWAITING_CART_DECISION
+    cart = context.user_data["cart"]
+    assert len(cart) == 2
+    assert cart[0].total == 6 * 80 * 9500   # 80cm bracket rate
+    assert cart[1].total == 4 * 60 * 8500   # 60cm bracket rate
+
+
+def test_letters_manual_entry_accepts_multiple_lines_as_separate_groups():
+    context = make_context()
+    context.user_data.update({"category_id": "letters_acrylic_led", "pending_text_purpose": "letters"})
+    update = make_text_update("6, 80\n4, 60")
+
+    state = asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    assert state == AWAITING_CART_DECISION
+    cart = context.user_data["cart"]
+    assert len(cart) == 2
+    assert cart[0].total == 6 * 80 * 9500
+    assert cart[1].total == 4 * 60 * 8500
+
+
+def test_letters_manual_entry_single_line_still_works():
+    context = make_context()
+    context.user_data.update({"category_id": "letters_acrylic_led", "pending_text_purpose": "letters"})
+    update = make_text_update("5, 80")
+
+    asyncio.run(handle_text_input(update, context, PRICE_LIST, FakeLangStore(), FAKE_CONFIG))
+
+    cart = context.user_data["cart"]
+    assert len(cart) == 1
+    assert cart[0].total == 5 * 80 * 9500
+
+
 def _cart_context(cart):
     context = make_context()
     context.user_data["cart"] = cart
