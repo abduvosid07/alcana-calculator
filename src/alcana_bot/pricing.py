@@ -56,6 +56,14 @@ def price_per_sqm_options(category: Category, option_index: int, width_cm: float
     return LineItem(label=category.id, detail=f"{option.get('label', '')} {width_cm}x{height_cm} см", unit_price=unit_price, quantity=area, total=total)
 
 def price_per_letter_by_height(category: Category, letter_count: int, height_cm: float) -> LineItem:
+    """Price is per centimeter of actual letter height, per letter.
+
+    height_prices entries give the rate (so'm/cm) for the bracket the letter's
+    height falls into -- e.g. up to 60cm costs 8,500 so'm per cm. The rate
+    rounds up to the next bracket once height exceeds it, but the ACTUAL
+    height is what gets billed (you pay for the real cm of material produced,
+    at the rate for your size tier), not the bracket's nominal height.
+    """
     if category.height_prices is None:
         raise PricingError(f"{category.id}: has no height_prices configured")
     brackets = sorted(category.height_prices, key=lambda hp: hp["height_cm"])
@@ -64,8 +72,9 @@ def price_per_letter_by_height(category: Category, letter_count: int, height_cm:
     match = next((hp for hp in brackets if hp["height_cm"] >= height_cm), None)
     if match is None:
         raise PricingError(f"{category.id}: no price bracket covers height {height_cm}cm (max is {brackets[-1]['height_cm']}cm)")
-    total = match["price"] * letter_count
-    return LineItem(label=category.id, detail=f"{letter_count} буквы x {match['height_cm']}см", unit_price=match["price"], quantity=letter_count, total=total)
+    rate_per_cm = match["price"]
+    total = round(rate_per_cm * height_cm * letter_count)
+    return LineItem(label=category.id, detail=f"{letter_count} буквы x {height_cm}см", unit_price=rate_per_cm, quantity=letter_count, total=total)
 
 def price_per_unit(category: Category, quantity: float) -> LineItem:
     total = round(category.price * quantity)

@@ -67,16 +67,29 @@ def test_price_per_sqm_options():
     assert isinstance(item.total, int)
 
 def test_price_per_letter_by_height_exact_match():
+    """Price is per CENTIMETER of letter height, per letter -- not a flat per-letter price."""
     category = PRICE_LIST.categories["letters_acrylic_led"]
     item = price_per_letter_by_height(category, letter_count=5, height_cm=80)
-    assert item.total == 47500  # 5 * 9,500
+    assert item.unit_price == 9500  # so'm per cm, at the 80cm bracket's rate
+    assert item.total == 3800000  # 5 letters * 80cm * 9,500/cm
     assert isinstance(item.total, int)
 
+def test_price_per_letter_by_height_till_60_bracket():
+    """Worked example confirmed with the business: a 50cm letter in the
+    'up to 60cm' bracket costs 50 * 8,500 so'm, not a flat 8,500."""
+    category = PRICE_LIST.categories["letters_acrylic_led"]
+    item = price_per_letter_by_height(category, letter_count=1, height_cm=50)
+    assert item.unit_price == 8500
+    assert item.total == 425000  # 1 * 50cm * 8,500/cm
+
 def test_price_per_letter_by_height_rounds_up_to_next_bracket():
+    """The RATE rounds up to the next bracket once height exceeds it, but the
+    actual height is still what gets multiplied (you're billed for the real
+    cm of material produced, at the rate for your size tier)."""
     category = PRICE_LIST.categories["letters_acrylic_led"]
     item = price_per_letter_by_height(category, letter_count=2, height_cm=90)
-    assert item.unit_price == 13000  # rounds up 90 -> 100cm bracket
-    assert item.total == 26000
+    assert item.unit_price == 13000  # rounds up 90 -> 100cm bracket's rate
+    assert item.total == 2340000  # 2 letters * 90cm (actual) * 13,000/cm
     assert isinstance(item.total, int)
 
 def test_price_per_letter_by_height_above_max_raises():
