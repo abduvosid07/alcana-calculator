@@ -68,7 +68,28 @@ def test_empty_response_text_becomes_extraction_error():
     with pytest.raises(ExtractionError, match="empty"):
         extract_dimensions_from_image(EmptyTextClient(), image_bytes=b"fake", media_type="image/png")
 
-def test_extract_letter_spec_from_image_parses_valid_json():
-    client = FakeClient(json.dumps({"letter_count": 6, "height_cm": 80, "confidence": 0.9}))
+def test_extract_letter_spec_from_image_parses_a_single_group():
+    client = FakeClient(json.dumps({"groups": [{"letter_count": 6, "height_cm": 80}], "confidence": 0.9}))
     result = extract_letter_spec_from_image(client, image_bytes=b"fake", media_type="image/png")
-    assert result == {"letter_count": 6, "height_cm": 80, "confidence": 0.9}
+    assert result == {"groups": [{"letter_count": 6, "height_cm": 80}], "confidence": 0.9}
+
+def test_extract_letter_spec_from_image_parses_multiple_groups():
+    """A design can have letters at more than one height (e.g. two different
+    words/lines) -- the bot must price each group separately instead of
+    collapsing the whole design into a single height."""
+    client = FakeClient(json.dumps({
+        "groups": [{"letter_count": 6, "height_cm": 80}, {"letter_count": 4, "height_cm": 60}],
+        "confidence": 0.9,
+    }))
+    result = extract_letter_spec_from_image(client, image_bytes=b"fake", media_type="image/png")
+    assert result["groups"] == [{"letter_count": 6, "height_cm": 80}, {"letter_count": 4, "height_cm": 60}]
+
+def test_extract_letter_spec_from_image_empty_groups_raises():
+    client = FakeClient(json.dumps({"groups": [], "confidence": 0.9}))
+    with pytest.raises(ExtractionError, match="groups"):
+        extract_letter_spec_from_image(client, image_bytes=b"fake", media_type="image/png")
+
+def test_extract_letter_spec_from_image_malformed_group_raises():
+    client = FakeClient(json.dumps({"groups": [{"letter_count": 6}], "confidence": 0.9}))  # missing height_cm
+    with pytest.raises(ExtractionError, match="groups"):
+        extract_letter_spec_from_image(client, image_bytes=b"fake", media_type="image/png")

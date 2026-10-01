@@ -17,11 +17,15 @@ _DIMENSIONS_PROMPT = (
 
 _LETTERS_PROMPT = (
     "This image shows a design for volumetric/3D letters (dimensional signage "
-    "letters). Count exactly how many individual letters/characters need to be "
-    "fabricated, and read or infer the intended letter height in centimeters "
-    "(one of 60, 80, 100, or 120cm, or another explicit value). Reply with ONLY "
-    'a JSON object, no other text: {"letter_count": <integer>, "height_cm": '
-    '<number>, "confidence": <0-1>}. Set confidence low if unclear.'
+    "letters). The design may contain letters at more than one height (e.g. "
+    "different words or lines of text at different sizes) -- identify each "
+    "distinct group of letters that share the same height. For each group, "
+    "count exactly how many individual letters/characters need to be "
+    "fabricated, and read or infer the height in centimeters (one of 60, 80, "
+    "100, or 120cm, or another explicit value). Reply with ONLY a JSON "
+    'object, no other text, in this exact shape: {"groups": [{"letter_count": '
+    '<integer>, "height_cm": <number>}, ...], "confidence": <0-1>}. Set '
+    "confidence low (below 0.5) if any group is unclear."
 )
 
 def _strip_code_fence(text: str) -> str:
@@ -74,4 +78,11 @@ def extract_dimensions_from_image(client, image_bytes: bytes, media_type: str) -
     return _call_vision(client, image_bytes, media_type, _DIMENSIONS_PROMPT, ["width_cm", "height_cm", "confidence"])
 
 def extract_letter_spec_from_image(client, image_bytes: bytes, media_type: str) -> dict:
-    return _call_vision(client, image_bytes, media_type, _LETTERS_PROMPT, ["letter_count", "height_cm", "confidence"])
+    result = _call_vision(client, image_bytes, media_type, _LETTERS_PROMPT, ["groups", "confidence"])
+    groups = result["groups"]
+    if not isinstance(groups, list) or not groups:
+        raise ExtractionError(f"Model response 'groups' must be a non-empty list: {result}")
+    for group in groups:
+        if "letter_count" not in group or "height_cm" not in group:
+            raise ExtractionError(f"Model response has a malformed entry in 'groups' (missing letter_count/height_cm): {result}")
+    return result
